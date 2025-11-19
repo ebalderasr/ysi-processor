@@ -11,13 +11,10 @@ __pycache__/
 venv/
 env/
 
-# Data
-*.csv
-!data/Data_test.csv      # <-- Permite solo tu archivo de prueba
-
 # OS-generated files
 .DS_Store
 Thumbs.db
 
 # Editor settings
 .vscode/
+
