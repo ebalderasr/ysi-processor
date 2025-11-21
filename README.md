@@ -1,152 +1,89 @@
-# 📌 `ysi-processor`
+# 🔬 YSI Data Processor — Google Colab Pipeline
 
-`ysi-processor` es un conjunto de scripts en Python para **procesar datos crudos exportados del analizador bioquímico YSI** (glucosa, lactato, glutamina y glutamato) y generar archivos limpios, agregados y formateados para análisis de cultivos celulares, cinética, bioprocesos, etc.
+Este repositorio contiene un **pipeline completo en Google Colab** para procesar datos crudos exportados del analizador bioquímico **YSI (Yellow Springs Instruments)** utilizados comúnmente en cultivos celulares CHO, bioprocesos y monitoreo metabólico.
 
----
+El notebook realiza automáticamente:
 
-## 🧪 ¿Qué problema resuelve?
-
-Los archivos exportados del YSI contienen **una fila por medición**, incluyendo réplicas técnicas. Este repositorio permite:
-
-| Paso                                  | Acción                                                 | Resultado                                       |
-| ------------------------------------- | ------------------------------------------------------ | ----------------------------------------------- |
-| **1. Procesar archivo crudo del YSI** | Agrupa réplicas, calcula promedios, std, CV y outliers | `ysi_summary.csv` + `ysi_raw_with_outliers.csv` |
-| **2. Convertir a formato horizontal** | Una fila por pozo, cada metabolito en columna          | `ysi_summary_wide.csv`                          |
-
----
-
-## 📂 Estructura del repositorio
-
-```
-ysi-processor/
-│
-├── src/
-│   ├── process_ysi.py              # Procesa archivos crudos del YSI
-│   ├── ysi_summary_to_wide.py      # Pivotea a formato horizontal
-│
-├── notebooks/
-│   ├── 01_YSI Data Processor.ipynb
-│   ├── 02_YSI wide summary.ipynb
-│
-├── data/
-│   ├── Data_test.csv               # Archivo de ejemplo (opcional)
-│
-├── README.md
-├── .gitignore
+### **⚙ Procesamiento de datos**
+- Importa archivos CSV crudos exportados desde el YSI
+- Agrupa réplicas técnicas por:
 ```
 
----
-
-## 🔧 Requerimientos
-
-| Paquete   | Para qué se usa                             |
-| --------- | ------------------------------------------- |
-| `pandas`  | Lectura y agrupamiento de datos             |
-| `numpy`   | Estadística y cálculo de z-score            |
-| `tkinter` | Selección de archivo mediante ventana (GUI) |
-
-Instalar dependencias:
-
-```bash
-pip install pandas numpy
-```
-
-Tkinter en Ubuntu:
-
-```bash
-sudo apt install python3-tk
-```
-
----
-
-## ▶ **Cómo ejecutar el procesamiento principal**
-
-Ejecuta:
-
-```bash
-python src/process_ysi.py
-```
-
-Se abrirá una ventana para seleccionar un archivo **exportado directamente del YSI** (formato `.csv` crudo del equipo).
-
----
-
-### 📥 **Entrada esperada**
-
-Un archivo raw del YSI con columnas como:
-
-| WellId | ChemistryId | Concentration | Units | PlateSequenceName | ... |
-| ------ | ----------- | ------------- | ----- | ----------------- | --- |
-
-Ejemplo:
+PlateSequenceName + WellId + ChemistryId
 
 ```
-R24_A01, Glucose, 5.23, g/L, 20251114-T0-T3
-R24_A01, Glucose, 5.19, g/L, 20251114-T0-T3
-R24_A01, Glucose, 5.20, g/L, 20251114-T0-T3
-...
+- Calcula estadísticos clave:
+- Media
+- Desviación estándar
+- Coeficiente de variación (CV)
+- Detección de outliers mediante Z-score
+
+### **📁 Archivos generados**
+| Archivo | Descripción |
+|---------|-------------|
+| `ysi_summary.csv` | Promedios y estadística por pozo y metabolito |
+| `ysi_summary_wide.csv` | Una fila por pozo, columnas por metabolito |
+| Gráficas STD | Visualización de variabilidad técnica entre corridas |
+
+Todos los archivos se pueden descargar directamente desde el notebook.
+
+---
+
+## **▶ Cómo usarlo**
+
+1. Abre el notebook en Google Colab
+2. Ejecuta las celdas en orden
+3. Sube tu archivo CSV crudo desde el YSI
+4. Descarga los resultados procesados
+
+_El usuario no necesita Python local, Tkinter ni instalar dependencias._
+
+---
+
+## **📍 Características importantes**
+
+- No mezcla datos de corridas distintas (agrupa por `PlateSequenceName`)
+- No convierte unidades (usa datos tal cual se miden)
+- Permite visualizar variabilidad técnica por run
+- Útil para cinética, fed-batch, y estudios de consumo metabólico
+
+---
+
+## **✔ Requisitos del archivo de entrada (formato YSI)**
+
+Debe contener al menos estas columnas:
+
 ```
 
-No requiere preprocesamiento manual.
+PlateSequenceName
+WellId
+ChemistryId
+Concentration
+Units
 
----
-
-### 📤 **Archivos que genera**
-
-| Archivo                         | Descripción                                                                          |
-| ------------------------------- | ------------------------------------------------------------------------------------ |
-| **`ysi_summary.csv`**           | Una fila por (PlateSequenceName, WellId, ChemistryId) con media, std, CV, # réplicas |
-| **`ysi_raw_with_outliers.csv`** | Todos los datos originales + columnas limpias + flag de outliers                     |
-
-Ejemplo de `ysi_summary.csv`:
-
-| PlateSequenceName | WellId  | ChemistryId | mean_value | std_value | cv_value | n_reps | outlier_count | units |
-| ----------------- | ------- | ----------- | ---------- | --------- | -------- | ------ | ------------- | ----- |
-| 20251114-T0-T3    | R24_A01 | Glucose     | 5.23       | 0.04      | 0.007    | 3      | 0             | g/L   |
-
----
-
-## ▶ **Cómo convertir a formato horizontal**
-
-Ejecutar:
-
-```bash
-python src/ysi_summary_to_wide.py
 ```
 
----
+Ejemplo típico:
 
-### 📤 **Salida**
-
-Genera:
-
-| PlateSequenceName | WellId  | Glucose | Lactate | Glutamine | Glutamate |
-| ----------------- | ------- | ------- | ------- | --------- | --------- |
-| 20251114-T0-T3    | R24_A01 | 5.23    | 0.40    | 5.10      | 2.03      |
-
-Útil para:
-
-* cinética de cultivos
-* cálculos de consumo específico
-* modelado metabólico
+| PlateSequenceName | WellId  | ChemistryId | Concentration | Units |
+|------------------|---------|-------------|---------------|-------|
+| 20251114-T0-T3   | R24_A01 | Glucose     | 5.23          | g/L   |
+| 20251114-T0-T3   | R24_A01 | Glucose     | 5.20          | g/L   |
 
 ---
 
-## ⚠ Notas importantes
+## **📌 Próximas mejoras (planeadas)**
 
-* No convierte unidades (usa los datos tal cual vienen del YSI)
-* Detecta outliers usando z-score (> 2)
-* Acepta placas de 24 o 28 pozos siempre que exista `WellId`
-
-Si necesitas conversión automática a mM o filtros por clones/tiempos, puedo incorporarlo.
-
----
-
-## 🧬 Próximas mejoras (pendientes)
-
-* Cálculo automático de tasas (qGlc, qLac)
-* Integración con datos de VCD/viabilidad
-* Interfaz gráfica completa
-* Paquete instalable via `pip install ysi-processor`
+- Conversión opcional g/L ⇄ mM usando PM
+- Cálculo de consumo específico (qGlc, qGln, qLac)
+- Exportación directa para Opentrons / liquid handlers
+- Normalización por VCD y viabilidad
 
 ---
+
+## **🧪 Autor**
+
+Desarrollado por Emiliano Balderas Ramírez con asistencia de ChatGPT.  
+Repositorio con fines académicos y experimentales.
+
+```
