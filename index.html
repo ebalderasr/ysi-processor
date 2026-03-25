@@ -5,188 +5,209 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>YSI Processor Live</title>
   <meta name="description" content="Browser-based YSI 2950 BioSample processor for replicate QC, means, standard deviation, and export-ready results.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="assets/styles.css">
 </head>
 <body>
-  <div class="page-shell">
-    <header class="hero">
-      <div class="hero-copy">
-        <p class="eyebrow">YSI 2950 Live App</p>
-        <h1>Upload a BioSample file. Review replicates. Export cleaned results.</h1>
-        <p class="lede">
-          This GitHub Pages app processes raw <code>BioSample*.csv</code> files entirely in the browser.
-          No install, no Python environment, no server upload.
-        </p>
-        <div class="hero-note">
-          Replicates are grouped by <code>PlateSequenceName</code>, <code>BatchName</code>, <code>WellId</code>, and <code>ChemistryId</code>.
+
+  <header class="app-bar">
+    <div class="app-bar-inner">
+      <div class="app-bar-brand">
+        <span class="brand-mark">YSI</span>
+        <div class="brand-text">
+          <span class="brand-name">Processor <em>Live</em></span>
+          <span class="brand-tagline">YSI 2950 BioSample QC · runs entirely in your browser</span>
         </div>
       </div>
-      <div class="hero-card">
-        <div class="card-kicker">Bench Workflow</div>
-        <ol class="hero-steps">
-          <li>Drop one or more YSI <code>BioSample*.csv</code> files</li>
-          <li>Inspect mean, SD, CV, and flagged replicates</li>
-          <li>Export summary, outliers, annotated measurements, and manifest</li>
-        </ol>
+      <div class="app-bar-pills">
+        <span class="app-pill">No install</span>
+        <span class="app-pill">No upload</span>
+        <span class="app-pill">No server</span>
       </div>
-    </header>
+    </div>
+  </header>
 
+  <div class="page-shell">
     <main class="main-grid">
 
-      <!-- Upload -->
-      <section class="panel intake-panel">
-        <div class="panel-head">
-          <h2>Input</h2>
-          <p>Files stay local in your browser session.</p>
-        </div>
-        <label class="dropzone" id="dropzone">
-          <input id="file-input" type="file" accept=".csv,text/csv" multiple>
-          <span class="drop-title">Drop BioSample CSV files here</span>
-          <span class="drop-subtitle">or click to choose one or more files</span>
-        </label>
-        <div class="file-list" id="file-list"></div>
-        <div class="controls-grid">
-          <label>
-            <span>CV threshold (%)</span>
-            <input id="cv-threshold" type="number" min="0" step="0.1" value="5.0">
-          </label>
-          <label>
-            <span>Modified z threshold</span>
-            <input id="modz-threshold" type="number" min="0" step="0.1" value="3.5">
-          </label>
-          <label>
-            <span>IQR multiplier</span>
-            <input id="iqr-multiplier" type="number" min="0" step="0.1" value="1.5">
-          </label>
-          <label>
-            <span>Consensus signals</span>
-            <input id="consensus-flags" type="number" min="1" step="1" value="1">
-          </label>
-        </div>
-        <div class="button-row">
-          <button id="process-button" class="primary">Process Files</button>
-          <button id="load-demo-button" class="secondary">Load Demo Header Guide</button>
-        </div>
-        <div class="status-box" id="status-box">Waiting for BioSample files.</div>
-      </section>
+      <!-- ── Intake + settings ── -->
+      <section class="panel intake-panel" aria-label="File upload and settings">
+        <div class="intake-inner">
 
-      <!-- Expected CSV + methodology -->
-      <section class="panel info-panel">
-        <div class="panel-head">
-          <h2>Expected CSV</h2>
-          <p>Minimum required fields for a valid YSI export.</p>
-        </div>
-        <div class="pill-grid">
-          <span class="pill">PlateSequenceName</span>
-          <span class="pill">BatchName</span>
-          <span class="pill">WellId</span>
-          <span class="pill">ChemistryId</span>
-          <span class="pill">Concentration</span>
-        </div>
-        <p class="info-copy">
-          Optional fields such as <code>CompletionState</code>, <code>LocalCompletionTime</code>, and <code>Errors</code>
-          are incorporated into metadata and QC context when present.
-        </p>
-        <div class="manifest-preview" id="manifest-preview"></div>
-        <details class="method-accordion">
-          <summary>How are outliers detected?</summary>
-          <div class="method-body">
-            <p>Three independent statistical tests run on each replicate group (≥ 3 replicates required). A replicate is recommended for discard when it accumulates enough flags (configurable via <em>Consensus signals</em>).</p>
-            <dl>
-              <dt>Modified Z-Score</dt>
-              <dd>Uses the median and MAD (median absolute deviation) — robust to non-normal distributions. Flags a replicate if |0.6745 × (value − median) / MAD| exceeds the threshold.</dd>
-              <dt>IQR Fence</dt>
-              <dd>Flags values that fall outside Q1 − multiplier × IQR or Q3 + multiplier × IQR. Requires a non-zero IQR.</dd>
-              <dt>Leave-One-Out CV</dt>
-              <dd>Tests whether removing each replicate reduces the group CV below the threshold. Only the replicate whose removal gives the greatest improvement is a candidate.</dd>
-            </dl>
-            <p>The <strong>cleaned mean/SD</strong> is computed after applying the recommended discard. Groups are marked <strong>REVIEW</strong> if no single outlier is identified but CV still exceeds the threshold.</p>
+          <div class="intake-drop-side">
+            <label class="dropzone" id="dropzone">
+              <input id="file-input" type="file" accept=".csv,text/csv" multiple aria-label="Choose CSV files">
+              <svg class="drop-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M12 16V4m0 0L8 8m4-4 4 4"/><rect x="3" y="16" width="18" height="5" rx="2"/>
+              </svg>
+              <span class="drop-title">Drop BioSample CSV files here</span>
+              <span class="drop-subtitle">or click to choose one or more files</span>
+            </label>
+            <div class="file-list" id="file-list"></div>
+            <div class="status-bar" id="status-box">Waiting for BioSample files.</div>
           </div>
-        </details>
+
+          <div class="intake-settings-side">
+            <div class="settings-section">
+              <p class="settings-label">QC Thresholds</p>
+              <div class="controls-grid">
+                <label class="control-field">
+                  <span>CV threshold (%)</span>
+                  <input id="cv-threshold" type="number" min="0" step="0.1" value="5.0">
+                </label>
+                <label class="control-field">
+                  <span>Modified z</span>
+                  <input id="modz-threshold" type="number" min="0" step="0.1" value="3.5">
+                </label>
+                <label class="control-field">
+                  <span>IQR multiplier</span>
+                  <input id="iqr-multiplier" type="number" min="0" step="0.1" value="1.5">
+                </label>
+                <label class="control-field">
+                  <span>Consensus signals</span>
+                  <input id="consensus-flags" type="number" min="1" step="1" value="1">
+                </label>
+              </div>
+            </div>
+
+            <div class="settings-section">
+              <p class="settings-label">Required CSV columns</p>
+              <div class="pill-grid">
+                <span class="pill">PlateSequenceName</span>
+                <span class="pill">BatchName</span>
+                <span class="pill">WellId</span>
+                <span class="pill">ChemistryId</span>
+                <span class="pill">Concentration</span>
+              </div>
+              <p class="settings-note">
+                Optional: <code>CompletionState</code>, <code>Units</code>, <code>LocalCompletionTime</code>, <code>Errors</code>
+              </p>
+            </div>
+
+            <div class="settings-section">
+              <div class="action-row">
+                <button id="process-button" class="btn-primary">
+                  <svg viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M10 18a8 8 0 1 0 0-16 8 8 0 0 0 0 16ZM9.555 7.168A1 1 0 0 0 8 8v4a1 1 0 0 0 1.555.832l3-2a1 1 0 0 0 0-1.664l-3-2Z" clip-rule="evenodd"/></svg>
+                  Process Files
+                </button>
+                <button id="load-demo-button" class="btn-ghost">Format guide</button>
+              </div>
+            </div>
+
+            <details class="method-accordion">
+              <summary>How are outliers detected?</summary>
+              <div class="method-body">
+                <p>Three independent statistical tests run on each replicate group (≥ 3 replicates required). A replicate is recommended for discard when it accumulates enough flags (configurable via <em>Consensus signals</em>).</p>
+                <dl>
+                  <dt>Modified Z-Score</dt>
+                  <dd>Uses the median and MAD — robust to non-normal distributions. Flags a replicate if |0.6745 × (value − median) / MAD| exceeds the threshold.</dd>
+                  <dt>IQR Fence</dt>
+                  <dd>Flags values outside Q1 − multiplier × IQR or Q3 + multiplier × IQR.</dd>
+                  <dt>Leave-One-Out CV</dt>
+                  <dd>Tests whether removing each replicate reduces group CV below threshold. Only the best-improvement replicate is a candidate.</dd>
+                </dl>
+                <p>The <strong>cleaned mean/SD</strong> is computed after the recommended discard. Groups are <strong>REVIEW</strong> when no single outlier is found but CV still exceeds threshold.</p>
+              </div>
+            </details>
+
+            <div class="manifest-preview" id="manifest-preview"></div>
+          </div>
+
+        </div>
       </section>
 
-      <!-- Run summary KPIs -->
-      <section class="panel kpi-panel hidden" id="kpi-panel">
-        <div class="panel-head">
-          <h2>Run Summary</h2>
-          <p>High-level diagnostics for the current browser session.</p>
-        </div>
+      <!-- ── KPI strip ── -->
+      <section class="panel kpi-panel hidden" id="kpi-panel" aria-label="Run summary">
         <div class="kpi-grid" id="kpi-grid"></div>
       </section>
 
-      <!-- Quick Results — primary output -->
-      <section class="panel quick-results-panel hidden" id="quick-results-panel">
+      <!-- ── Results table ── -->
+      <section class="panel results-panel hidden" id="quick-results-panel" aria-label="Cleaned results">
         <div class="panel-head">
-          <div>
+          <div class="panel-head-left">
             <h2>Results</h2>
-            <p>Cleaned mean ± SD per replicate group. Flagged groups appear first.</p>
+            <p>Cleaned mean ± SD per well. Flagged wells appear first.</p>
           </div>
-          <button id="copy-results-btn" class="secondary">Copy for Excel</button>
+          <div class="panel-head-actions">
+            <button id="copy-results-btn" class="btn-secondary">
+              <svg viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path d="M7 3.5A1.5 1.5 0 0 1 8.5 2h3.879a1.5 1.5 0 0 1 1.06.44l3.122 3.12A1.5 1.5 0 0 1 17 6.622V12.5a1.5 1.5 0 0 1-1.5 1.5h-1v-3.379a3 3 0 0 0-.879-2.121L10.5 5.379A3 3 0 0 0 8.379 4.5H7v-1Z"/><path d="M4.5 6A1.5 1.5 0 0 0 3 7.5v9A1.5 1.5 0 0 0 4.5 18h7a1.5 1.5 0 0 0 1.5-1.5v-5.879a1.5 1.5 0 0 0-.44-1.06L9.44 6.439A1.5 1.5 0 0 0 8.378 6H4.5Z"/></svg>
+              Copy for Excel
+            </button>
+          </div>
         </div>
         <div class="downloads-strip">
           <span class="downloads-label">Download</span>
-          <button id="download-summary" class="dl-btn">Summary CSV</button>
-          <button id="download-measurements" class="dl-btn">Measurements CSV</button>
-          <button id="download-outliers" class="dl-btn">Outliers CSV</button>
-          <button id="download-manifest" class="dl-btn">Manifest CSV</button>
+          <button id="download-summary" class="dl-btn">
+            <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 .5a.5.5 0 0 1 .5.5v7.793l2.146-2.147a.5.5 0 0 1 .708.708l-3 3a.5.5 0 0 1-.708 0l-3-3a.5.5 0 1 1 .708-.708L7.5 8.793V1a.5.5 0 0 1 .5-.5Zm-5 11a.5.5 0 0 0 0 1h10a.5.5 0 0 0 0-1H3Z"/></svg>
+            Summary
+          </button>
+          <button id="download-measurements" class="dl-btn">
+            <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 .5a.5.5 0 0 1 .5.5v7.793l2.146-2.147a.5.5 0 0 1 .708.708l-3 3a.5.5 0 0 1-.708 0l-3-3a.5.5 0 1 1 .708-.708L7.5 8.793V1a.5.5 0 0 1 .5-.5Zm-5 11a.5.5 0 0 0 0 1h10a.5.5 0 0 0 0-1H3Z"/></svg>
+            Measurements
+          </button>
+          <button id="download-outliers" class="dl-btn">
+            <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 .5a.5.5 0 0 1 .5.5v7.793l2.146-2.147a.5.5 0 0 1 .708.708l-3 3a.5.5 0 0 1-.708 0l-3-3a.5.5 0 1 1 .708-.708L7.5 8.793V1a.5.5 0 0 1 .5-.5Zm-5 11a.5.5 0 0 0 0 1h10a.5.5 0 0 0 0-1H3Z"/></svg>
+            Outliers
+          </button>
+          <button id="download-manifest" class="dl-btn">
+            <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 .5a.5.5 0 0 1 .5.5v7.793l2.146-2.147a.5.5 0 0 1 .708.708l-3 3a.5.5 0 0 1-.708 0l-3-3a.5.5 0 1 1 .708-.708L7.5 8.793V1a.5.5 0 0 1 .5-.5Zm-5 11a.5.5 0 0 0 0 1h10a.5.5 0 0 0 0-1H3Z"/></svg>
+            Manifest
+          </button>
         </div>
         <div class="table-wrap">
           <table id="quick-results-table"></table>
         </div>
       </section>
 
-      <!-- CV variability chart (full width) -->
-      <section class="panel chart-panel hidden" id="chart-panel">
+      <!-- ── CV chart ── -->
+      <section class="panel chart-panel hidden" id="chart-panel" aria-label="Variability snapshot">
         <div class="panel-head">
-          <h2>Variability Snapshot</h2>
-          <p>Top replicate groups by raw CV, with cleaned CV after recommended discard. Red line marks the CV threshold.</p>
-        </div>
-        <div class="chart-legend">
-          <span class="legend-raw">Raw CV</span>
-          <span class="legend-clean">Cleaned CV</span>
-          <span class="legend-threshold">CV threshold</span>
+          <div class="panel-head-left">
+            <h2>Variability Snapshot</h2>
+            <p>Top wells by raw CV with cleaned CV after recommended discard.</p>
+          </div>
+          <div class="chart-legend">
+            <span class="legend-raw">Raw CV</span>
+            <span class="legend-clean">Cleaned CV</span>
+            <span class="legend-threshold">Threshold</span>
+          </div>
         </div>
         <div id="cv-chart" class="chart-wrap"></div>
       </section>
 
-      <!-- Flagged replicates (with reason) -->
-      <section class="panel flags-panel hidden" id="flags-panel">
+      <!-- ── Flagged replicates ── -->
+      <section class="panel flags-panel hidden" id="flags-panel" aria-label="Flagged replicates">
         <div class="panel-head">
-          <h2>Flagged Replicates</h2>
-          <p>Individual replicates that triggered review or are recommended for discard.</p>
+          <div class="panel-head-left">
+            <h2>Flagged Replicates</h2>
+            <p>Individual replicates that triggered review or are recommended for discard.</p>
+          </div>
         </div>
         <div class="table-wrap">
           <table id="outliers-table"></table>
         </div>
       </section>
 
-      <!-- Full QC summary -->
-      <section class="panel results-panel hidden" id="results-panel">
-        <div class="panel-head">
-          <h2>Full QC Summary</h2>
-          <p>All group-level statistics including raw and cleaned values.</p>
+      <!-- ── Annotated measurements (collapsed tab) ── -->
+      <details class="measurements-details hidden" id="measurements-details">
+        <summary class="measurements-summary">
+          <svg viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M6 4.75A.75.75 0 0 1 6.75 4h10.5a.75.75 0 0 1 0 1.5H6.75A.75.75 0 0 1 6 4.75ZM6 10a.75.75 0 0 1 .75-.75h10.5a.75.75 0 0 1 0 1.5H6.75A.75.75 0 0 1 6 10Zm0 5.25a.75.75 0 0 1 .75-.75h10.5a.75.75 0 0 1 0 1.5H6.75a.75.75 0 0 1-.75-.75ZM1.99 4.75a1 1 0 0 1 1-1H3a1 1 0 0 1 0 2h-.01a1 1 0 0 1-1-1ZM1.99 10a1 1 0 0 1 1-1H3a1 1 0 0 1 0 2h-.01a1 1 0 0 1-1-1ZM1.99 15.25a1 1 0 0 1 1-1H3a1 1 0 0 1 0 2h-.01a1 1 0 0 1-1-1Z" clip-rule="evenodd"/></svg>
+          <span>Annotated Measurements</span>
+          <span class="measurements-desc">Replicate-level QC detail for downstream audit</span>
+          <span class="measurements-chevron">▸</span>
+        </summary>
+        <div class="measurements-body">
+          <div class="table-wrap">
+            <table id="measurements-table"></table>
+          </div>
         </div>
-        <div class="toolbar">
-          <input id="summary-search" type="search" placeholder="Filter summary table">
-        </div>
-        <div class="table-wrap">
-          <table id="summary-table"></table>
-        </div>
-      </section>
-
-      <!-- Annotated measurements -->
-      <section class="panel detail-panel hidden" id="detail-panel">
-        <div class="panel-head">
-          <h2>Annotated Measurements</h2>
-          <p>Replicate-level QC detail, suitable for downstream audit.</p>
-        </div>
-        <div class="table-wrap">
-          <table id="measurements-table"></table>
-        </div>
-      </section>
+      </details>
 
     </main>
   </div>
+
   <script src="assets/app.js"></script>
 </body>
 </html>
