@@ -362,10 +362,10 @@ function buildSummary(annotated, config) {
       const cleanStd = cleanValues.length > 1 ? sampleStd(cleanValues) : Number.NaN;
       const cleanCV = safeCv(cleanMean, cleanStd);
       return {
-        PlateSequenceName: first.PlateSequenceName,
         BatchName: first.BatchName,
         WellId: first.WellId,
         ChemistryId: first.ChemistryId,
+        PlateSequenceNames: joinUnique(group.map((row) => row.PlateSequenceName).filter(Boolean)),
         ReplicateCount: group.length,
         DiscardedReplicateCount: discarded.length,
         RecommendedDiscardReplicates: discarded.map((row) => row.ReplicateIndex).join(", "),
@@ -642,15 +642,14 @@ function groupBy(items, keyFn) {
 }
 
 function groupKey(row) {
-  return [row.PlateSequenceName, row.BatchName, row.WellId, row.ChemistryId].join("||");
+  return [row.BatchName, row.WellId, row.ChemistryId].join("||");
 }
 
 function sortGroups(left, right) {
   const a = left[0];
   const b = right[0];
   return (
-    a.PlateSequenceName.localeCompare(b.PlateSequenceName)
-    || a.BatchName.localeCompare(b.BatchName)
+    a.BatchName.localeCompare(b.BatchName)
     || a.WellId.localeCompare(b.WellId)
     || a.ChemistryId.localeCompare(b.ChemistryId)
   );
@@ -788,19 +787,19 @@ function buildWellPivot(summary) {
     chemUnit[chem] = match ? match.Unit : "";
   });
 
-  // Pivot: (Plate||Batch||Well) → { meta, data: {ChemistryId → summaryRow} }
+  // Pivot: (Batch||Well) → { meta, data: {ChemistryId → summaryRow} }
   const wellMap = new Map();
   summary.forEach((row) => {
-    const key = [row.PlateSequenceName, row.BatchName, row.WellId].join("||");
+    const key = [row.BatchName, row.WellId].join("||");
     if (!wellMap.has(key)) wellMap.set(key, { meta: row, data: {} });
     wellMap.get(key).data[row.ChemistryId] = row;
   });
 
-  // Sort wells by Plate → Batch → Well (natural sort)
+  // Sort wells by Batch → Well (natural sort)
   const sortedKeys = [...wellMap.keys()].sort((a, b) => {
-    const [pa, ba, wa] = a.split("||");
-    const [pb, bb, wb] = b.split("||");
-    return pa.localeCompare(pb) || ba.localeCompare(bb) || wa.localeCompare(wb);
+    const [ba, wa] = a.split("||");
+    const [bb, wb] = b.split("||");
+    return ba.localeCompare(bb) || wa.localeCompare(wb);
   });
 
   return { sortedChemistries, chemUnit, wellMap, sortedKeys };
@@ -817,7 +816,7 @@ function renderQuickResults(summary, config) {
   const { sortedChemistries, chemUnit, wellMap, sortedKeys } = buildWellPivot(summary);
 
   // Two-row header: meta cols (rowspan=2) + chemistry group headers (colspan=4) / sub-headers
-  const metaHeadersHtml = ["Well", "Plate", "Batch"]
+  const metaHeadersHtml = ["Well", "Batch", "Plates"]
     .map((h) => `<th rowspan="2">${escapeHtml(h)}</th>`)
     .join("");
 
@@ -847,8 +846,8 @@ function renderQuickResults(summary, config) {
 
     const metaCells = [
       `<td class="well-id-cell"><strong>${escapeHtml(meta.WellId)}</strong></td>`,
-      `<td>${escapeHtml(meta.PlateSequenceName)}</td>`,
       `<td>${escapeHtml(meta.BatchName)}</td>`,
+      `<td class="plates-cell">${escapeHtml(meta.PlateSequenceNames || "")}</td>`,
     ].join("");
 
     const chemCells = sortedChemistries.map((chem, ci) => {
@@ -879,8 +878,8 @@ function copyResultsTable() {
   const { summary, config } = state.outputs;
   const { sortedChemistries, chemUnit, wellMap, sortedKeys } = buildWellPivot(summary);
 
-  // Header row: Well, Plate, Batch, then per-chemistry columns
-  const headerCols = ["Well", "Plate", "Batch"];
+  // Header row: Well, Batch, Plates, then per-chemistry columns
+  const headerCols = ["Well", "Batch", "Plates"];
   sortedChemistries.forEach((chem) => {
     const unit = chemUnit[chem] ? ` (${chemUnit[chem]})` : "";
     headerCols.push(
@@ -893,7 +892,7 @@ function copyResultsTable() {
 
   const rows = sortedKeys.map((key) => {
     const { meta, data } = wellMap.get(key);
-    const cols = [meta.WellId, meta.PlateSequenceName, meta.BatchName];
+    const cols = [meta.WellId, meta.BatchName, meta.PlateSequenceNames || ""];
     sortedChemistries.forEach((chem) => {
       const row = data[chem];
       if (!row) {
