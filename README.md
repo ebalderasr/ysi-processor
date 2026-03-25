@@ -1,35 +1,36 @@
-# YSI Processor
-> **Quality control and replicate review for YSI 2950 BioSample exports. Fast, traceable, and lab-ready.**
+# YSI Processor Live
+> **A browser-first GitHub Pages app for YSI 2950 BioSample QC, replicate averaging, SD reporting, and export-ready results.**
 
-YSI Processor is a small Python tool for processing raw exports from the **YSI 2950 biochemical analyzer**, especially when samples are acquired with an autosampler in **24-well or 96-well plate layouts**.
+YSI Processor Live is a static web app designed to run directly from **GitHub Pages**.
 
-It is designed for workflows where **glucose**, **lactate**, and other metabolite readings are used to support daily decisions in **CHO cell culture**, feeding strategy, and process monitoring.
+The user opens the page, uploads one or more `BioSample*.csv` files exported by the **YSI 2950**, and the analysis happens **locally in the browser**:
 
----
+- no Python installation
+- no virtual environment
+- no command line
+- no server-side upload
 
-## What is YSI Processor?
-
-`ysi_processor.py` takes one or more raw `BioSample*.csv` files exported by the YSI software and converts them into:
-
-- a replicate-level QC table
-- a cleaned summary by plate, batch, well, and metabolite
-- an outlier review table
-- a metadata manifest
-- an HTML report with visual QC outputs
-
-The tool is intended to answer a practical bench-side question:
-
-**Which technical replicate looks wrong, and can I trust this well before making a process decision?**
+This repository also keeps the Python engine used to define and validate the analysis workflow, but the primary product is now the **live app**.
 
 ---
 
-## Input Files
+## Live Workflow
 
-This project is built specifically for **YSI 2950 BioSample CSV exports**.
+1. Open the GitHub Pages site
+2. Drag and drop one or more `BioSample*.csv` files
+3. Review grouped samples and replicate QC
+4. Inspect mean, SD, raw CV, cleaned CV, and flagged replicates
+5. Export results as CSV
 
-### Expected file pattern
+Everything runs in the browser session.
 
-The processor scans the input directory for files matching:
+---
+
+## What Files Does the App Accept?
+
+The app is built specifically for **YSI 2950 BioSample CSV exports**.
+
+### Expected filename pattern
 
 ```text
 BioSample*.csv
@@ -39,14 +40,12 @@ Examples:
 
 ```text
 BioSample_15F000007_24-03-2026_19-49-25.csv
-BioSample_plateA_run02.csv
+BioSample_run_02.csv
 ```
 
-### Expected file type
+### Required columns
 
-The input must be a **CSV exported directly from the YSI 2950 software**.
-
-The current implementation expects the file to contain, at minimum, these columns:
+The uploaded CSV must contain these fields:
 
 - `PlateSequenceName`
 - `BatchName`
@@ -54,17 +53,18 @@ The current implementation expects the file to contain, at minimum, these column
 - `ChemistryId`
 - `Concentration`
 
-If present, the processor also uses optional columns such as:
+### Optional fields used when present
 
 - `CompletionState`
-- `SampleSequenceName`
 - `LocalCompletionTime`
+- `SampleSequenceName`
 - `Errors`
-- other metadata fields that help with traceability
 
-### Real header example
+The app uses optional fields to improve filtering, traceability, and review context.
 
-The BioSample files currently present in this repository contain this structure:
+### Real example header
+
+The BioSample exports already tested in this repository contain:
 
 ```text
 PlateSequenceName
@@ -90,240 +90,145 @@ Temperature
 Errors
 ```
 
-### How replicates are defined
+---
 
-This is important.
+## How Samples and Replicates Are Grouped
 
-The tool considers measurements to belong to the same replicate group only when they share the same:
+The app treats rows as belonging to the same replicate group only when they share:
 
 - `PlateSequenceName`
 - `BatchName`
 - `WellId`
 - `ChemistryId`
 
-This avoids accidentally mixing:
+This is important because it prevents accidental mixing of:
 
-- different plates
-- different YSI batches/runs
+- different YSI runs or batches
 - different wells
 - different analytes such as glucose and lactate
-
-### What the file usually represents
-
-In practice, a single BioSample export often contains:
-
-- one acquisition batch from the YSI
-- multiple wells from a plate
-- more than one chemistry per well
-- repeated technical measurements across matching identifiers
-
-Each row is treated as an individual analytical measurement.  
-The processor groups those rows into replicate sets and evaluates whether one measurement is inconsistent with the rest.
+- different plate sequences
 
 ---
 
-## Scientific QC Logic
+## What the User Gets
 
-YSI Processor does not rely only on a fixed CV threshold.
+After processing the uploaded files, the app calculates:
 
-Instead, it combines multiple signals to decide whether a replicate should be reviewed or discarded:
+- **mean** for each grouped sample
+- **standard deviation (SD)** for each grouped sample
+- **raw CV%**
+- **cleaned mean / SD / CV%** after excluding the recommended outlier
+- **replicate-level anomaly flags**
 
-- **Raw CV%** of the replicate group
-- **Modified z-score** based on median absolute deviation (MAD)
-- **IQR fences** for robust outlier detection
-- **Leave-one-out CV improvement**, to test whether removing one replicate makes the group acceptable
+The UI exposes:
 
-This is useful because in real lab work:
+- a summary table by sample
+- a flagged replicate table
+- an annotated measurement table
+- a manifest of uploaded files and metadata
 
-- a bad pipetting event may affect only one replicate
-- a bubble, sampling issue, or read instability may produce a single deviant value
-- CV alone can tell you a group is noisy, but not always which replicate caused the problem
+The user can export:
 
-The processor therefore annotates each replicate individually and recommends discard only when there is enough evidence to justify it.
-
----
-
-## What the Tool Produces
-
-After processing, the output directory contains:
-
-- `ysi_measurements_annotated.csv`
 - `ysi_summary.csv`
+- `ysi_measurements_annotated.csv`
 - `ysi_outliers.csv`
 - `ysi_file_manifest.csv`
-- `ysi_cv_overview.png`
-- `ysi_flagged_replicates.png`
-- `ysi_quality_report.html`
-
-### Output meanings
-
-**`ysi_measurements_annotated.csv`**  
-One row per raw measurement, with QC metrics added.  
-Use this file when you want to inspect the exact replicate that was flagged.
-
-**`ysi_summary.csv`**  
-One row per unique combination of:
-
-- `PlateSequenceName`
-- `BatchName`
-- `WellId`
-- `ChemistryId`
-
-This is the main working table for downstream analysis.
-
-**`ysi_outliers.csv`**  
-Focused table of replicate groups that require review, including candidate outliers.
-
-**`ysi_file_manifest.csv`**  
-File-level metadata summary for traceability across runs.
-
-**`ysi_quality_report.html`**  
-Quick visual report to inspect flagged wells and variability before/after cleaning.
 
 ---
 
-## How to Use
+## Outlier Detection Logic
 
-### 1. Create a virtual environment
+The browser app uses the same analytical logic implemented for the Python engine:
 
-```bash
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-```
+- raw replicate-group **CV%**
+- **modified z-score** based on MAD
+- **IQR fences**
+- **leave-one-out CV improvement**
 
-### 2. Place your YSI files in an input directory
+This means the app does more than say “this well looks noisy”.
 
-Example layout:
+It tries to identify:
+
+- whether the replicate group needs review
+- whether one replicate is the most likely bad measurement
+- whether removing that replicate improves the group to an acceptable CV
+
+---
+
+## Repository Layout
 
 ```text
 ysi-processor/
-├── data/
-│   ├── BioSample_15F000007_24-03-2026_19-49-25.csv
-│   └── BioSample_15F000007_25-03-2026_08-10-01.csv
-└── demo_output/
+├── index.html
+├── assets/
+│   ├── app.js
+│   └── styles.css
+├── ysi_toolkit/
+│   ├── analysis.py
+│   ├── io.py
+│   ├── pipeline.py
+│   └── ...
+├── tests/
+├── ysi_processor.py
+└── README.md
 ```
 
-### 3. Run the processor
+### Browser app
+
+- `index.html`: GitHub Pages entry point
+- `assets/app.js`: in-browser BioSample parser, QC engine, rendering, and CSV export
+- `assets/styles.css`: UI styling
+
+### Python engine
+
+- `ysi_toolkit/`: Python implementation of the processing logic
+- `ysi_processor.py`: CLI entry point for offline validation and development
+- `tests/`: Python tests for the engine
+
+---
+
+## Local Preview
+
+If you want to preview the app locally without deploying:
 
 ```bash
-python ysi_processor.py --input data --output demo_output --cv 5.0 --verbose
+python3 -m http.server 8000
 ```
 
-### 4. Review the results
+Then open:
 
-Start with:
-
-- `demo_output/ysi_summary.csv`
-- `demo_output/ysi_outliers.csv`
-- `demo_output/ysi_quality_report.html`
-
----
-
-## CLI Options
-
-- `--input`: directory containing `BioSample*.csv`
-- `--output`: directory where reports and tables will be written
-- `--cv`: CV threshold used to mark groups that require review
-- `--modified-z`: threshold for robust modified z-score outlier detection
-- `--iqr-multiplier`: IQR fence width
-- `--consensus-min-flags`: minimum number of outlier signals required to recommend discard
-- `--title`: custom title for the HTML report
-- `--verbose`: enable logging
-
-Example:
-
-```bash
-python ysi_processor.py \
-  --input data \
-  --output results \
-  --cv 5.0 \
-  --modified-z 3.5 \
-  --iqr-multiplier 1.5 \
-  --consensus-min-flags 1 \
-  --verbose
+```text
+http://localhost:8000
 ```
 
----
-
-## How to Interpret the Results
-
-Some columns you will likely use often:
-
-### In `ysi_measurements_annotated.csv`
-
-- `ReplicateIndex`: position of the replicate inside its group
-- `RawCVPercent`: variability of the full group before cleaning
-- `ModifiedZScore`: robust outlier score
-- `IsOutlierModifiedZ`: whether the replicate crosses the z-score threshold
-- `IsOutlierIQR`: whether the replicate falls outside IQR fences
-- `IsLeaveOneOutCandidate`: whether excluding that replicate improves the group CV
-- `RecommendedDiscard`: whether the processor recommends removing it
-- `ReplicateStatus`: `keep` or `discard`
-
-### In `ysi_summary.csv`
-
-- `ReplicateCount`: total technical replicates in the group
-- `DiscardedReplicateCount`: number of recommended discards
-- `RecommendedDiscardReplicates`: which replicate index should be reviewed
-- `RawMean`, `RawStd`, `RawCVPercent`: original statistics
-- `CleanMean`, `CleanStd`, `CleanCVPercent`: recalculated statistics after excluding recommended outliers
-- `ReviewRequired`: whether the group deserves manual review
-- `PassesCVThresholdAfterCleaning`: whether the cleaned group becomes acceptable
-
-Practical interpretation:
-
-- If `ReviewRequired = False`, the group is likely stable.
-- If `ReviewRequired = True` but `RecommendedDiscard = False` for all rows, the group is noisy but not attributable to one clear replicate.
-- If one replicate has `RecommendedDiscard = True`, that is the first value to inspect before deciding to repeat the sample.
+Because the app is static, no build step is required.
 
 ---
 
-## Typical Use Cases
+## GitHub Pages Deployment
 
-YSI Processor is useful for:
+This repository is structured so the root can be published directly with GitHub Pages.
 
-- reviewing daily metabolite reads from CHO cultures
-- spotting probable pipetting or sampling errors
-- deciding whether a well should be repeated before data release
-- cleaning technical replicates prior to trend analysis
-- preserving metadata traceability across YSI runs
-- preparing more reliable glucose/lactate series for feeding decisions
+Typical setup:
 
----
+1. Go to **Settings**
+2. Open **Pages**
+3. Set source to:
+   - **Deploy from a branch**
+   - branch: `main`
+   - folder: `/ (root)`
+4. Save
 
-## Notes and Limitations
-
-- The tool assumes the CSV comes from the YSI BioSample export format.
-- `BatchName` is required to avoid mixing measurements from different runs.
-- Outlier detection is a decision aid, not a substitute for scientific judgment.
-- Very small replicate groups limit the strength of robust statistics.
-- If a group is noisy but no single replicate is clearly abnormal, manual review is still necessary.
-- Sensor or acquisition issues reported in `Errors` should always be checked alongside numerical QC flags.
-
----
-
-## Architecture
-
-- `ysi_processor.py`: CLI entry point
-- `ysi_toolkit/io.py`: file discovery and ingestion
-- `ysi_toolkit/analysis.py`: normalization, grouping, QC, and summary logic
-- `ysi_toolkit/reporting.py`: CSV outputs, figures, and HTML report
-- `ysi_toolkit/pipeline.py`: end-to-end orchestration
-- `tests/`: unit tests with `pytest`
+GitHub Pages will then serve `index.html` as the live app.
 
 ---
 
 ## Validation
 
-The current codebase includes automated tests for:
-
-- outlier recommendation on replicate groups
-- cleaned summary generation after discard
-- end-to-end pipeline output creation
-
-Run them with:
+The Python engine is still tested locally with:
 
 ```bash
 ./.venv/bin/python -m pytest -q
 ```
+
+This keeps the analytical logic verifiable even though the primary user workflow is now browser-based.

@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>YSI Processor Live</title>
+  <meta name="description" content="Browser-based YSI 2950 BioSample processor for replicate QC, means, standard deviation, and export-ready results.">
+  <link rel="stylesheet" href="assets/styles.css">
+</head>
+<body>
+  <div class="page-shell">
+    <header class="hero">
+      <div class="hero-copy">
+        <p class="eyebrow">YSI 2950 Live App</p>
+        <h1>Upload a BioSample file. Review replicates. Export cleaned results.</h1>
+        <p class="lede">
+          This GitHub Pages app processes raw <code>BioSample*.csv</code> files entirely in the browser.
+          No install, no Python environment, no server upload.
+        </p>
+        <div class="hero-note">
+          Replicates are grouped by <code>PlateSequenceName</code>, <code>BatchName</code>, <code>WellId</code>, and <code>ChemistryId</code>.
+        </div>
+      </div>
+      <div class="hero-card">
+        <div class="card-kicker">Bench Workflow</div>
+        <ol class="hero-steps">
+          <li>Drop one or more YSI <code>BioSample*.csv</code> files</li>
+          <li>Inspect mean, SD, CV, and flagged replicates</li>
+          <li>Export summary, outliers, annotated measurements, and manifest</li>
+        </ol>
+      </div>
+    </header>
+
+    <main class="main-grid">
+      <section class="panel intake-panel">
+        <div class="panel-head">
+          <h2>Input</h2>
+          <p>Files stay local in your browser session.</p>
+        </div>
+        <label class="dropzone" id="dropzone">
+          <input id="file-input" type="file" accept=".csv,text/csv" multiple>
+          <span class="drop-title">Drop BioSample CSV files here</span>
+          <span class="drop-subtitle">or click to choose one or more files</span>
+        </label>
+        <div class="file-list" id="file-list"></div>
+        <div class="controls-grid">
+          <label>
+            <span>CV threshold (%)</span>
+            <input id="cv-threshold" type="number" min="0" step="0.1" value="5.0">
+          </label>
+          <label>
+            <span>Modified z threshold</span>
+            <input id="modz-threshold" type="number" min="0" step="0.1" value="3.5">
+          </label>
+          <label>
+            <span>IQR multiplier</span>
+            <input id="iqr-multiplier" type="number" min="0" step="0.1" value="1.5">
+          </label>
+          <label>
+            <span>Consensus signals</span>
+            <input id="consensus-flags" type="number" min="1" step="1" value="1">
+          </label>
+        </div>
+        <div class="button-row">
+          <button id="process-button" class="primary">Process Files</button>
+          <button id="load-demo-button" class="secondary">Load Demo Header Guide</button>
+        </div>
+        <div class="status-box" id="status-box">Waiting for BioSample files.</div>
+      </section>
+
+      <section class="panel info-panel">
+        <div class="panel-head">
+          <h2>Expected CSV</h2>
+          <p>Minimum required fields for a valid YSI export.</p>
+        </div>
+        <div class="pill-grid">
+          <span class="pill">PlateSequenceName</span>
+          <span class="pill">BatchName</span>
+          <span class="pill">WellId</span>
+          <span class="pill">ChemistryId</span>
+          <span class="pill">Concentration</span>
+        </div>
+        <p class="info-copy">
+          Optional fields such as <code>CompletionState</code>, <code>LocalCompletionTime</code>, and <code>Errors</code>
+          are incorporated into metadata and QC context when present.
+        </p>
+        <div class="manifest-preview" id="manifest-preview"></div>
+      </section>
+
+      <section class="panel kpi-panel hidden" id="kpi-panel">
+        <div class="panel-head">
+          <h2>Run Summary</h2>
+          <p>High-level diagnostics for the current browser session.</p>
+        </div>
+        <div class="kpi-grid" id="kpi-grid"></div>
+      </section>
+
+      <section class="panel chart-panel hidden" id="chart-panel">
+        <div class="panel-head">
+          <h2>Variability Snapshot</h2>
+          <p>Top replicate groups by raw CV with cleaned CV after recommended discard.</p>
+        </div>
+        <div id="cv-chart" class="chart-wrap"></div>
+      </section>
+
+      <section class="panel results-panel hidden" id="results-panel">
+        <div class="panel-head">
+          <h2>Summary Table</h2>
+          <p>Mean, SD, CV and cleaned values by plate, batch, well and chemistry.</p>
+        </div>
+        <div class="toolbar">
+          <input id="summary-search" type="search" placeholder="Filter summary table">
+          <div class="button-row compact">
+            <button id="download-summary" class="secondary">Export Summary CSV</button>
+            <button id="download-measurements" class="secondary">Export Measurements CSV</button>
+            <button id="download-outliers" class="secondary">Export Outliers CSV</button>
+            <button id="download-manifest" class="secondary">Export Manifest CSV</button>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table id="summary-table"></table>
+        </div>
+      </section>
+
+      <section class="panel flags-panel hidden" id="flags-panel">
+        <div class="panel-head">
+          <h2>Flagged Replicates</h2>
+          <p>Rows that require review or are recommended for discard.</p>
+        </div>
+        <div class="table-wrap">
+          <table id="outliers-table"></table>
+        </div>
+      </section>
+
+      <section class="panel detail-panel hidden" id="detail-panel">
+        <div class="panel-head">
+          <h2>Annotated Measurements</h2>
+          <p>Replicate-level QC detail, suitable for downstream audit.</p>
+        </div>
+        <div class="table-wrap">
+          <table id="measurements-table"></table>
+        </div>
+      </section>
+    </main>
+  </div>
+  <script src="assets/app.js"></script>
+</body>
+</html>
