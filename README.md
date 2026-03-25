@@ -1,15 +1,20 @@
 <div align="center">
 
-# YSI Processor
+# YSI Processor Live
 
-### Browser-based YSI 2950 BioSample analysis for replicate QC, means, SD, and export
+### Replicate QC and statistics for YSI 2950 BioSample exports
+
+<br>
+
+**[→ Open the live app](https://ebalderasr.github.io/ysi-processor/)**
 
 <br>
 
 [![Stack](https://img.shields.io/badge/Stack-HTML_·_CSS_·_JavaScript-F97316?style=for-the-badge)]()
-[![Mode](https://img.shields.io/badge/Mode-GitHub_Pages_Live_App-0F766E?style=for-the-badge)]()
-[![Input](https://img.shields.io/badge/Input-BioSample_CSV-155E75?style=for-the-badge)]()
+[![Mode](https://img.shields.io/badge/Mode-Runs_in_the_browser-0F766E?style=for-the-badge)]()
+[![Engine](https://img.shields.io/badge/Engine-Python_CLI_available-155E75?style=for-the-badge)]()
 [![License](https://img.shields.io/badge/License-MIT-blue?style=for-the-badge)](./LICENSE)
+[![Part of](https://img.shields.io/badge/Part_of-Host_Cell_Lab_Suite-b45309?style=for-the-badge)](https://github.com/ebalderasr)
 
 </div>
 
@@ -17,247 +22,246 @@
 
 ## What is YSI Processor?
 
-YSI Processor is a **live web app for analyzing YSI 2950 BioSample exports** directly in the browser.  
-The user opens the page, uploads one or more raw `BioSample*.csv` files, and gets:
+YSI Processor is a **live web app for analyzing YSI 2950 BioSample exports** directly in the browser. Upload one or more raw `BioSample*.csv` files and get:
 
-- grouped technical replicates
-- mean and standard deviation for each sample
-- raw and cleaned CV
-- replicate-level anomaly flags
-- CSV exports for downstream analysis
+- replicate groups with mean, SD, and CV per well and analyte
+- automated outlier detection with discard recommendations
+- a pivot table with one row per well and one column group per analyte
+- CSV exports ready for reports or downstream analysis
 
-The app is designed for routine metabolite review workflows in **CHO cell culture**, especially when glucose, lactate, and related readings are used for feeding decisions, troubleshooting, or daily process tracking.
+It is designed for routine metabolite review in CHO and other mammalian cell culture workflows, particularly when glucose, lactate, glutamine, and glutamate readings drive feeding decisions or process tracking.
 
-There is **no backend and no server-side processing**. The selected files are processed locally in the browser session.
+Everything runs locally in the browser. No data leaves your machine.
 
 ---
 
 ## Why it matters
 
-YSI workflows often involve repetitive manual review:
+YSI 2950 workflows typically involve repetitive manual review after each session:
 
-- uploading raw exports into notebooks or ad hoc scripts
-- checking whether replicates belong to the same sample or run
-- calculating mean, SD, and CV by hand or in spreadsheets
-- guessing which replicate is the bad one when one reading drifts
-- reformatting results for downstream reports
+- exporting raw CSVs and opening them in spreadsheets
+- checking whether replicates from different plate sequences belong to the same sample
+- calculating mean, SD, and CV by hand
+- guessing which replicate caused a high CV
+- reformatting everything for downstream reports
 
-YSI Processor reduces that friction by giving the user a single browser interface focused on the actual bench question:
+YSI Processor reduces that friction to a single CSV drop. The core question it answers is:
 
-**Can I trust this sample, and if not, which replicate should I inspect first?**
+**Can I trust this reading, and if not, which replicate should I re-inspect?**
 
 ---
 
 ## How it works
 
-### 1. Upload YSI BioSample files
+### 1. Replicate grouping
 
-The app accepts one or more `BioSample*.csv` files exported by the YSI software.
+Rows are grouped by **`BatchName` + `WellId` + `ChemistryId`**. This means all measurements of the same physical well across multiple plate sequences within the same batch are treated as replicates of the same sample — which is the correct behavior when running the same samples through multiple YSI plate sequences (e.g. routine run + MCR mid-cycle run).
 
-Required fields:
+`PlateSequenceName` is preserved as metadata and shown in the results table under **Plates**, but it does not fragment the replicate groups.
 
-- `PlateSequenceName`
-- `BatchName`
-- `WellId`
-- `ChemistryId`
-- `Concentration`
+### 2. Outlier detection
 
-Optional fields such as `CompletionState`, `LocalCompletionTime`, `SampleSequenceName`, and `Errors` are used when present.
+Three independent tests run on each replicate group (minimum 3 replicates required):
 
-### 2. Group replicates correctly
-
-Rows are grouped only when they share the same:
-
-- `PlateSequenceName`
-- `BatchName`
-- `WellId`
-- `ChemistryId`
-
-This prevents accidental mixing of:
-
-- different YSI runs
-- different batches
-- different wells
-- different analytes
-
-### 3. Compute sample statistics
-
-For each grouped sample, the app calculates:
-
-- mean
-- standard deviation
-- replicate count
-- raw CV%
-- cleaned mean / SD / CV after excluding the recommended outlier
-
-### 4. Flag suspicious replicates
-
-The current live app combines:
-
-- raw replicate-group CV
-- modified z-score based on MAD
-- IQR fences
-- leave-one-out CV improvement
-
-This allows the user to review not only **which sample is noisy**, but also **which replicate is the most likely source of the problem**.
-
-### 5. Export results
-
-The app can export:
-
-- `ysi_summary.csv`
-- `ysi_measurements_annotated.csv`
-- `ysi_outliers.csv`
-- `ysi_file_manifest.csv`
-
----
-
-## Current feature set
-
-| | |
+| Test | Logic |
 |---|---|
-| **Live browser workflow** | Use the tool directly from GitHub Pages without installation |
-| **Local-only processing** | Uploaded files stay in the browser session |
-| **Replicate grouping** | Groups by `PlateSequenceName + BatchName + WellId + ChemistryId` |
-| **Sample statistics** | Mean, SD, replicate count, raw CV, and cleaned CV |
-| **Replicate QC** | Flags likely outliers and recommends discards |
-| **Metadata manifest** | Summarizes uploaded files and available metadata fields |
-| **CSV export** | Export summary, outliers, annotated measurements, and manifest |
-| **Local preview** | Run the exact same static app locally from the terminal |
-| **Legacy notebook retained** | `process_ysi.ipynb` remains available for older Colab-based workflows |
+| **Modified Z-Score** | Uses median and MAD — robust to non-normal distributions. Flags if `\|0.6745 × (value − median) / MAD\|` exceeds the threshold. |
+| **IQR Fence** | Flags values outside `Q1 − k × IQR` or `Q3 + k × IQR`. |
+| **Leave-One-Out CV** | Tests whether removing each replicate reduces group CV below threshold. Only the candidate that gives the greatest improvement is flagged. |
 
----
+A replicate is **recommended for discard** when it accumulates at least *N* flags (configurable via *Consensus signals*). When multiple replicates qualify, the one with the highest flag score, then best CV improvement, then largest deviation from the median is chosen.
 
-## Input format
+### 3. Status labels
 
-The app expects **YSI 2950 BioSample CSV exports**.
+Each well+analyte group receives one of four statuses:
 
-Typical filename pattern:
+| Status | Meaning |
+|---|---|
+| **PASS** | CV below threshold, no flags |
+| **CLEANED** | Outlier discarded; cleaned CV now passes |
+| **REVIEW** | CV above threshold but no single outlier identified |
+| **FAIL** | CV above threshold even after removing the worst replicate |
 
-```text
-BioSample*.csv
-```
+### 4. Results pivot table
 
-Example:
+The **Results** panel shows one row per well with column groups per analyte (Glucose, Lactate, Glutamine, Glutamate). Each group displays:
 
-```text
-BioSample_15F000007_24-03-2026_19-49-25.csv
-```
+- `Mean` — cleaned mean after recommended discard
+- `SD` — cleaned standard deviation
+- `CV%` — highlighted in red if above threshold
+- `Status` — color-coded badge
 
-Typical header:
+Rows with FAIL or REVIEW status appear first. The table can be copied for direct pasting into Excel.
 
-```text
-PlateSequenceName
-BatchName
-LocalCompletionTime
-CompletionState
-WellId
-ChemistryId
-ProbeId
-Concentration
-Units
-Endpoint
-SampleSize
-InitialBaseline
-Plateau
-FinalBaseline
-NetPlateau
-NetPlateauTempAdj
-CrossNetPlateau
-CrossNetPlateauTempAdj
-PlateauSlope
-Temperature
-Errors
-```
+### 5. Exports
+
+| File | Contents |
+|---|---|
+| `ysi_summary.csv` | One row per replicate group with raw and cleaned statistics |
+| `ysi_measurements_annotated.csv` | Replicate-level QC detail with all flag scores |
+| `ysi_outliers.csv` | Only the rows that triggered review or discard |
+| `ysi_file_manifest.csv` | Metadata summary of the uploaded files |
 
 ---
 
 ## How to use it
 
-### Option 1. Use the live app
+### Option 1 — Live app (recommended)
 
-Open:
+Open **[ebalderasr.github.io/ysi-processor](https://ebalderasr.github.io/ysi-processor/)** in any modern browser.
 
-```text
-https://ebalderasr.github.io/ysi-processor/
-```
+1. Set QC thresholds if needed (CV%, Modified Z, IQR multiplier, Consensus signals)
+2. Drop one or more `BioSample*.csv` files onto the dropzone
+3. Click **Process Files**
+4. Review the KPI strip, Results pivot table, Variability Snapshot chart, and Flagged Replicates table
+5. Copy the pivot table for Excel or download individual CSV exports
 
-Then:
+No installation required. Files are processed entirely in your browser session.
 
-1. Upload one or more `BioSample*.csv` files
-2. Review the summary table and flagged replicates
-3. Export the processed CSV outputs
+---
 
-This is the main intended workflow.
+### Option 2 — Python CLI (local, batch processing)
 
-### Option 2. Run it locally from the terminal as a static app
+The `ysi_toolkit` package provides a full Python backend with the same analysis logic. Useful for batch processing, integration into pipelines, or running from scripts.
 
-Clone the repository and start a simple local web server:
+**Requirements**
 
 ```bash
-git clone https://github.com/ebalderasr/ysi-processor.git
-cd ysi-processor
-python3 -m http.server 8000
+pip install -r requirements.txt
 ```
 
-Then open:
-
-```text
-http://localhost:8000
+`requirements.txt`:
+```
+pandas
+numpy
+matplotlib
 ```
 
-This runs the same live app locally, without any build step.
+**Basic usage**
 
-### Option 3. Use the legacy notebook workflow
+Place your `BioSample*.csv` files in a directory and run:
 
-If you still want the older notebook-based approach, this repo keeps:
-
-```text
-process_ysi.ipynb
+```bash
+python ysi_processor.py --input ./data --output ./results
 ```
 
-You can open it in Jupyter or Google Colab and follow the notebook flow.
+**All options**
+
+```
+--input            Directory with BioSample*.csv files  (default: current dir)
+--output           Directory for output files            (default: current dir)
+--cv               CV threshold for review               (default: 5.0)
+--modified-z       Modified z-score threshold            (default: 3.5)
+--iqr-multiplier   IQR fence multiplier                  (default: 1.5)
+--consensus-min-flags  Minimum flags to recommend discard (default: 1)
+--title            HTML report title
+--verbose          Enable debug logging
+```
+
+**Example**
+
+```bash
+python ysi_processor.py \
+  --input ./20260317-T2 \
+  --output ./results \
+  --cv 5.0 \
+  --modified-z 3.5 \
+  --verbose
+```
+
+**Outputs written to `--output`**
+
+```
+results/
+├── ysi_summary.csv
+├── ysi_measurements_annotated.csv
+├── ysi_outliers.csv
+├── ysi_file_manifest.csv
+├── ysi_quality_report.html
+├── ysi_cv_overview.png
+└── ysi_flagged_replicates.png
+```
+
+---
+
+## Input format
+
+### Required columns
+
+| Column | Accepted aliases | Description |
+|---|---|---|
+| `PlateSequenceName` | `PlateName`, `PlateID` | Plate run identifier |
+| `BatchName` | `Batch`, `BatchID` | Experiment batch name |
+| `WellId` | `WellID`, `Well`, `Position` | Sample position |
+| `ChemistryId` | `ChemistryID`, `Chemistry`, `Analyte` | Analyte name |
+| `Concentration` | `Result`, `Value` | Measured value |
+
+### Optional columns
+
+| Column | Accepted aliases | Use |
+|---|---|---|
+| `CompletionState` | `Status`, `ResultState` | If present, only `Complete` rows are used |
+| `Units` | `Unit`, `MeasurementUnits` | Displayed in analyte column headers |
+| `LocalCompletionTime` | `DateTime`, `Timestamp` | Included in exports |
+| `Errors` | `Error`, `ErrorMessage` | Included in manifest |
+| `SampleSequenceName` | `SampleName`, `SampleId` | Included in summary |
+
+### Typical YSI 2950 export header
+
+```
+PlateSequenceName, BatchName, LocalCompletionTime, CompletionState,
+WellId, ChemistryId, ProbeId, Concentration, Units, Endpoint,
+SampleSize, InitialBaseline, Plateau, FinalBaseline, NetPlateau,
+NetPlateauTempAdj, CrossNetPlateau, CrossNetPlateauTempAdj,
+PlateauSlope, Temperature, Errors
+```
+
+---
+
+## Features
+
+| | |
+|---|---|
+| **No installation** | Runs fully client-side — no Python, no pip, no server |
+| **Multi-file support** | Load several plate sequences in one session |
+| **Cross-plate replicate grouping** | Groups by Batch + Well + Analyte; plate sequences merged correctly |
+| **Three-method outlier detection** | Modified Z-Score · IQR Fence · Leave-One-Out CV |
+| **Pivot results table** | One row per well, column groups per analyte with units |
+| **Status badges** | PASS · CLEANED · REVIEW · FAIL with color-coded rows |
+| **CV chart** | Variability snapshot for the top 20 wells |
+| **Copy for Excel** | Pivot table copied as tab-separated text |
+| **Four CSV exports** | Summary · Measurements · Outliers · Manifest |
+| **Python CLI** | Same analysis engine available as a local command-line tool |
 
 ---
 
 ## Project structure
 
-```text
-ysi-processor/
-├── README.md
-├── LICENSE
-├── .nojekyll
-├── index.html                ← GitHub Pages entry point
-├── assets/
-│   ├── app.js                ← in-browser parser, analysis, rendering, export
-│   └── styles.css            ← live app styling
-├── data/
-│   └── Data_test.csv         ← sample input data
-└── process_ysi.ipynb         ← legacy notebook workflow
 ```
-
----
-
-## Deployment
-
-The repository is configured to work as a **GitHub Pages site from `main` and the repository root**.
-
-Expected Pages setup:
-
-1. **Settings**
-2. **Pages**
-3. **Deploy from a branch**
-4. Branch: `main`
-5. Folder: `/ (root)`
-
-GitHub Pages should serve `index.html` as the app entry point.
+ysi-processor/
+├── index.html              ← GitHub Pages entry point
+├── assets/
+│   ├── app.js              ← in-browser parser, analysis, rendering, export
+│   └── styles.css          ← live app styles
+├── ysi_toolkit/            ← Python analysis engine
+│   ├── analysis.py         ← replicate grouping, outlier detection, summary
+│   ├── pipeline.py         ← batch processing pipeline
+│   ├── cli.py              ← command-line interface
+│   ├── config.py           ← ProcessingConfig dataclass
+│   ├── io.py               ← CSV reading and output writing
+│   └── reporting.py        ← HTML report and chart generation
+├── ysi_processor.py        ← CLI entry point
+├── requirements.txt
+├── demo_input/             ← sample input files
+└── demo_output/            ← sample output files
+```
 
 ---
 
 ## Author
 
-**Emiliano Balderas Ramírez**  
-Bioengineer · PhD Candidate in Biochemical Sciences  
+**Emiliano Balderas Ramírez**
+Bioengineer · PhD Candidate in Biochemical Sciences
 Instituto de Biotecnología (IBt), UNAM
 
 [![LinkedIn](https://img.shields.io/badge/LinkedIn-emilianobalderas-0A66C2?style=flat-square&logo=linkedin&logoColor=white)](https://www.linkedin.com/in/emilianobalderas/)
@@ -265,14 +269,14 @@ Instituto de Biotecnología (IBt), UNAM
 
 ---
 
-## Related
+## Related — Host Cell Lab Suite
 
-[**CellSplit**](https://github.com/ebalderasr/CellSplit) — passage planning and split calculations for adherent cell culture workflows.
+[**PulseGrowth**](https://github.com/ebalderasr/PulseGrowth) — growth kinetics and process timing for mammalian cell culture.
 
-[**PulseGrowth**](https://github.com/ebalderasr/PulseGrowth) — browser-based growth kinetics and process timing for mammalian cell culture.
+[**Clonalyzer 2**](https://github.com/ebalderasr/Clonalyzer-2) — fed-batch kinetics analysis for CHO cell cultures.
 
-[**Clonalyzer 2**](https://github.com/ebalderasr/Clonalyzer-2) — browser-based analysis tools for clone and culture workflows.
+[**CellSplit**](https://github.com/ebalderasr/CellSplit) — passage planning and split calculations for adherent cell culture.
 
 ---
 
-<div align="center"><i>YSI Processor — upload, review, export.</i></div>
+<div align="center"><i>YSI Processor — drop your BioSample CSV, get your replicate QC.</i></div>
