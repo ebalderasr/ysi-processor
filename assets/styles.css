@@ -167,6 +167,20 @@ code, .mono {
   white-space: nowrap;
 }
 
+.hostcell-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.2rem 0.65rem;
+  border-radius: 999px;
+  font-size: 0.70rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  background: rgba(180,83,9,.10);
+  color: var(--amber-700);
+  border: 1px solid rgba(180,83,9,.22);
+  white-space: nowrap;
+}
+
 /* ═══════════════════════════════════════════════════
    Page shell + grid
    ═══════════════════════════════════════════════════ */
@@ -227,9 +241,60 @@ code, .mono {
 /* ═══════════════════════════════════════════════════
    Intake panel
    ═══════════════════════════════════════════════════ */
-.intake-inner {
+
+/* ── Settings bar (horizontal strip above dropzone) ── */
+.settings-bar {
+  display: flex;
+  align-items: flex-end;
+  gap: 1.25rem;
+  padding-bottom: 1.1rem;
+  margin-bottom: 1.1rem;
+  border-bottom: 1px solid var(--border);
+  flex-wrap: wrap;
+}
+
+.settings-bar .settings-label {
+  white-space: nowrap;
+  align-self: flex-end;
+  padding-bottom: 0.55rem;
+}
+
+.settings-bar-fields {
+  display: flex;
+  gap: 0.65rem;
+  flex-wrap: wrap;
+}
+
+.setting-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.setting-field span {
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--ink-muted);
+  white-space: nowrap;
+}
+
+.setting-field input[type="number"] {
+  width: 88px;
+}
+
+.settings-bar-actions {
+  display: flex;
+  gap: 0.6rem;
+  align-items: flex-end;
+  margin-left: auto;
+}
+
+/* ── Dropzone + info side-by-side ── */
+.intake-body {
   display: grid;
-  grid-template-columns: 1fr 340px;
+  grid-template-columns: 1fr 300px;
   gap: 1.5rem;
 }
 
@@ -237,6 +302,14 @@ code, .mono {
   display: flex;
   flex-direction: column;
   gap: 0.85rem;
+}
+
+.intake-info-side {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  border-left: 1px solid var(--border);
+  padding-left: 1.5rem;
 }
 
 .dropzone {
@@ -312,17 +385,6 @@ code, .mono {
   line-height: 1.4;
 }
 
-/* Settings side */
-.intake-settings-side {
-  display: flex;
-  flex-direction: column;
-  gap: 1.1rem;
-  border-left: 1px solid var(--border);
-  padding-left: 1.5rem;
-}
-
-.settings-section { display: flex; flex-direction: column; gap: 0.6rem; }
-
 .settings-label {
   font-size: 0.72rem;
   font-weight: 700;
@@ -335,24 +397,6 @@ code, .mono {
   font-size: 0.78rem;
   color: var(--ink-faint);
   line-height: 1.55;
-}
-
-.controls-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 0.6rem;
-}
-
-.control-field {
-  display: flex;
-  flex-direction: column;
-  gap: 0.3rem;
-}
-
-.control-field span {
-  font-size: 0.78rem;
-  color: var(--ink-muted);
-  font-weight: 500;
 }
 
 input[type="number"],
@@ -857,23 +901,92 @@ td.no-data {
 /* ═══════════════════════════════════════════════════
    Utility
    ═══════════════════════════════════════════════════ */
+/* ═══════════════════════════════════════════════════
+   Footer
+   ═══════════════════════════════════════════════════ */
+.app-footer {
+  background: rgba(255, 252, 246, 0.88);
+  backdrop-filter: blur(12px);
+  border-top: 1px solid var(--border);
+  margin-top: 1rem;
+}
+
+.app-footer-inner {
+  width: min(1400px, calc(100% - 2rem));
+  margin: 0 auto;
+  padding: 1.1rem 0;
+  display: flex;
+  align-items: center;
+  gap: 2rem;
+  flex-wrap: wrap;
+}
+
+.footer-suite {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.footer-hostcell {
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: var(--amber-700);
+}
+
+.footer-desc {
+  font-size: 0.73rem;
+  color: var(--ink-faint);
+}
+
+.footer-author {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  margin-left: auto;
+}
+
+.footer-author strong {
+  font-size: 0.87rem;
+  color: var(--ink);
+}
+
+.footer-author span {
+  font-size: 0.73rem;
+  color: var(--ink-muted);
+}
+
+.btn-repo {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.52rem 1.1rem;
+  border-radius: 999px;
+  background: var(--slate-800);
+  color: white;
+  font-size: 0.84rem;
+  font-weight: 600;
+  text-decoration: none;
+  transition: background 140ms ease, transform 130ms ease, box-shadow 130ms ease;
+  box-shadow: var(--shadow-sm);
+}
+
+.btn-repo svg { width: 1.05em; height: 1.05em; }
+.btn-repo:hover { background: var(--slate-700); transform: translateY(-1px); box-shadow: var(--shadow-md); }
+
 .hidden { display: none; }
 
 /* ═══════════════════════════════════════════════════
    Responsive
    ═══════════════════════════════════════════════════ */
 @media (max-width: 1024px) {
-  .intake-inner {
+  .intake-body {
     grid-template-columns: 1fr;
   }
-  .intake-settings-side {
+  .intake-info-side {
     border-left: none;
     border-top: 1px solid var(--border);
     padding-left: 0;
     padding-top: 1rem;
-  }
-  .controls-grid {
-    grid-template-columns: repeat(4, 1fr);
   }
   .kpi-grid {
     grid-template-columns: repeat(2, 1fr);
@@ -891,7 +1004,8 @@ td.no-data {
 
   .panel { padding: 1rem; border-radius: var(--radius); }
 
-  .controls-grid { grid-template-columns: 1fr 1fr; }
+  .settings-bar { gap: 0.75rem; }
+  .settings-bar-actions { margin-left: 0; }
 
   .kpi-grid {
     grid-template-columns: 1fr 1fr;
@@ -900,7 +1014,11 @@ td.no-data {
   .chart-bar-row { grid-template-columns: 1fr; }
 
   .brand-tagline { display: none; }
+  .hostcell-badge { display: none; }
 
   .downloads-strip { gap: 0.4rem; }
   .dl-btn { padding: 0.35rem 0.7rem; font-size: 0.78rem; }
+
+  .footer-author { margin-left: 0; }
+  .app-footer-inner { gap: 1rem; }
 }
