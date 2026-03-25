@@ -133,9 +133,13 @@ code {
 }
 
 .info-panel,
-.kpi-panel,
-.chart-panel {
+.kpi-panel {
   grid-column: span 6;
+}
+
+.chart-panel,
+.quick-results-panel {
+  grid-column: span 12;
 }
 
 .panel-head {
@@ -436,8 +440,7 @@ tbody tr:nth-child(even) {
 @media (max-width: 1024px) {
   .hero,
   .info-panel,
-  .kpi-panel,
-  .chart-panel {
+  .kpi-panel {
     grid-template-columns: 1fr;
     grid-column: span 12;
   }
@@ -472,4 +475,171 @@ tbody tr:nth-child(even) {
   .hero h1 {
     max-width: 100%;
   }
+}
+
+/* ─── Status badges ─────────────────────────────────── */
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.22rem 0.65rem;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+
+.status-pass    { background: rgba(22, 101, 52, 0.14);  color: var(--ok); }
+.status-fail    { background: rgba(185, 28, 28, 0.14);  color: var(--warn); }
+.status-cleaned { background: rgba(21, 94, 117, 0.14);  color: var(--blue); }
+.status-review  { background: rgba(180, 83, 9, 0.14);   color: var(--accent-strong); }
+
+/* ─── Quick results row tinting ─────────────────────── */
+.row-fail td    { background: rgba(185, 28, 28, 0.055); }
+.row-fail:hover td { background: rgba(185, 28, 28, 0.10); }
+.row-review td  { background: rgba(180, 83, 9, 0.045); }
+.row-review:hover td { background: rgba(180, 83, 9, 0.09); }
+.row-cleaned td { background: rgba(21, 94, 117, 0.045); }
+.row-pass td    { background: transparent; }
+
+/* CV value coloring inside cells */
+.cv-high { color: var(--warn); font-weight: 700; }
+.cv-ok   { color: var(--ok); }
+
+/* ± separator in Mean ± SD cells */
+.sd-sep { color: var(--muted); margin: 0 0.2em; font-weight: 400; }
+
+/* ─── Downloads strip ───────────────────────────────── */
+.downloads-strip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.75rem 0;
+  margin-bottom: 1rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.downloads-label {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  margin-right: 0.2rem;
+}
+
+.dl-btn {
+  border-radius: 999px;
+  padding: 0.5rem 0.95rem;
+  font: inherit;
+  font-size: 0.88rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 140ms ease, background 140ms ease;
+  background: rgba(15, 118, 110, 0.10);
+  color: var(--teal);
+  border: 1px solid rgba(15, 118, 110, 0.22);
+}
+
+.dl-btn:hover {
+  transform: translateY(-1px);
+  background: rgba(15, 118, 110, 0.18);
+}
+
+/* ─── Methods accordion ─────────────────────────────── */
+.method-accordion {
+  margin-top: 1rem;
+  border-radius: 16px;
+  border: 1px solid var(--border);
+  overflow: hidden;
+}
+
+.method-accordion summary {
+  padding: 0.8rem 1rem;
+  cursor: pointer;
+  font-weight: 700;
+  font-size: 0.92rem;
+  background: rgba(180, 83, 9, 0.07);
+  color: var(--accent-strong);
+  list-style: none;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  user-select: none;
+}
+
+.method-accordion summary::-webkit-details-marker { display: none; }
+
+.method-accordion summary::after {
+  content: "▸";
+  font-size: 0.9em;
+  transition: transform 200ms ease;
+  flex-shrink: 0;
+}
+
+.method-accordion[open] summary::after {
+  transform: rotate(90deg);
+}
+
+.method-body {
+  padding: 1rem;
+  font-size: 0.9rem;
+  line-height: 1.65;
+  color: var(--muted);
+}
+
+.method-body p { margin: 0 0 0.7rem; }
+.method-body p:last-child { margin-bottom: 0; }
+.method-body dl { margin: 0; }
+
+.method-body dt {
+  font-weight: 700;
+  color: var(--ink);
+  margin-top: 0.7rem;
+}
+
+.method-body dd {
+  margin: 0.2rem 0 0 0;
+}
+
+/* ─── Chart legend ──────────────────────────────────── */
+.chart-legend {
+  display: flex;
+  gap: 1.2rem;
+  margin-bottom: 0.75rem;
+  font-size: 0.87rem;
+  color: var(--muted);
+  align-items: center;
+}
+
+.legend-raw::before,
+.legend-clean::before,
+.legend-threshold::before {
+  content: "";
+  display: inline-block;
+  width: 0.95rem;
+  height: 0.55rem;
+  border-radius: 999px;
+  margin-right: 0.4rem;
+  vertical-align: middle;
+}
+
+.legend-raw::before       { background: linear-gradient(90deg, #f97316, #b45309); }
+.legend-clean::before     { background: linear-gradient(90deg, #22c55e, #166534); }
+.legend-threshold::before { background: rgba(185, 28, 28, 0.65); width: 2px; height: 0.85rem; border-radius: 1px; }
+
+/* CV threshold marker inside bar tracks */
+.bar-track {
+  position: relative;
+}
+
+.bar-track-threshold {
+  position: absolute;
+  top: -2px;
+  bottom: -2px;
+  width: 2px;
+  background: rgba(185, 28, 28, 0.6);
+  border-radius: 1px;
+  z-index: 1;
 }

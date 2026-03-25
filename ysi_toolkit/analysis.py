@@ -55,6 +55,10 @@ def prepare_measurements(data: pd.DataFrame, columns: dict[str, str]) -> pd.Data
     concentration = columns["concentration"]
     frame[concentration] = pd.to_numeric(frame[concentration], errors="coerce")
     frame = frame.dropna(subset=[concentration]).copy()
+    negative_count = int((frame[concentration] < 0).sum())
+    if negative_count:
+        LOGGER.warning("Dropped %d row(s) with negative concentration values.", negative_count)
+    frame = frame[frame[concentration] >= 0].copy()
 
     if "state" in columns:
         state_column = columns["state"]
@@ -147,7 +151,16 @@ def _annotate_group(group: pd.DataFrame, config: ProcessingConfig) -> pd.DataFra
     recommended = review_signal & (flag_score >= max(1, config.consensus_min_flags))
 
     if recommended.sum() > 1:
-        top_idx = flag_score[recommended].idxmax()
+        deviation = (values - median).abs()
+        candidates = pd.DataFrame(
+            {"score": flag_score, "improvement": improvement, "deviation": deviation},
+            index=group.index,
+        )
+        top_idx = (
+            candidates[recommended]
+            .sort_values(["score", "improvement", "deviation"], ascending=False)
+            .index[0]
+        )
         recommended = pd.Series(False, index=group.index)
         recommended.loc[top_idx] = True
 

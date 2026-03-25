@@ -64,6 +64,9 @@ const dom = {
   downloadMeasurements: document.getElementById("download-measurements"),
   downloadOutliers: document.getElementById("download-outliers"),
   downloadManifest: document.getElementById("download-manifest"),
+  quickResultsPanel: document.getElementById("quick-results-panel"),
+  quickResultsTable: document.getElementById("quick-results-table"),
+  copyResultsBtn: document.getElementById("copy-results-btn"),
 };
 
 function initializeApp() {
@@ -75,6 +78,7 @@ function initializeApp() {
   dom.downloadMeasurements.addEventListener("click", () => downloadOutput("measurements", "ysi_measurements_annotated.csv"));
   dom.downloadOutliers.addEventListener("click", () => downloadOutput("outliers", "ysi_outliers.csv"));
   dom.downloadManifest.addEventListener("click", () => downloadOutput("manifest", "ysi_file_manifest.csv"));
+  dom.copyResultsBtn.addEventListener("click", copyResultsTable);
 
   ["dragenter", "dragover"].forEach((eventName) => {
     dom.dropzone.addEventListener(eventName, (event) => {
@@ -197,7 +201,7 @@ function prepareMeasurements(rows, columns) {
   const stateKey = columns.state;
   let filtered = rows
     .map((row) => ({ ...row, [concentrationKey]: Number(row[concentrationKey]) }))
-    .filter((row) => Number.isFinite(row[concentrationKey]));
+    .filter((row) => Number.isFinite(row[concentrationKey]) && row[concentrationKey] >= 0);
 
   if (stateKey) {
     const anyComplete = filtered.some((row) => String(row[stateKey] || "").trim().toLowerCase() === "complete");
@@ -387,6 +391,7 @@ function buildOutlierTable(annotated) {
       WellId: row.WellId,
       ChemistryId: row.ChemistryId,
       ReplicateIndex: row.ReplicateIndex,
+      Reason: formatReason(row),
       Concentration: roundOrBlank(row.Concentration, 4),
       ModifiedZScore: roundOrBlank(row.ModifiedZScore, 3),
       LeaveOneOutCVPercent: roundOrBlank(row.LeaveOneOutCVPercent, 2),
@@ -418,9 +423,10 @@ function buildManifest(rawRows) {
 }
 
 function renderOutputs() {
-  const { summary, outliers, measurements, manifest } = state.outputs;
+  const { summary, outliers, measurements, manifest, config } = state.outputs;
 
   dom.kpiPanel.classList.remove("hidden");
+  dom.quickResultsPanel.classList.remove("hidden");
   dom.chartPanel.classList.remove("hidden");
   dom.resultsPanel.classList.remove("hidden");
   dom.flagsPanel.classList.remove("hidden");
@@ -443,7 +449,8 @@ function renderOutputs() {
   });
 
   renderManifestPreview(manifest);
-  renderCvChart(summary);
+  renderQuickResults(summary, config);
+  renderCvChart(summary, config);
   renderSummaryTable();
   renderTable(dom.outliersTable, outliers, { limit: 150 });
   renderTable(dom.measurementsTable, measurements.map(formatMeasurementRow), { limit: 300 });
@@ -464,24 +471,30 @@ function renderManifestPreview(manifest) {
   `;
 }
 
-function renderCvChart(summary) {
+function renderCvChart(summary, config) {
   const topRows = [...summary]
     .sort((left, right) => numberOrNegInf(right.RawCVPercent) - numberOrNegInf(left.RawCVPercent))
-    .slice(0, 12);
-  const maxValue = Math.max(1, ...topRows.flatMap((row) => [Number(row.RawCVPercent) || 0, Number(row.CleanCVPercent) || 0]));
+    .slice(0, 20);
+  const threshold = config?.cvThreshold ?? 5;
+  const maxValue = Math.max(threshold * 1.1, ...topRows.flatMap((row) => [Number(row.RawCVPercent) || 0, Number(row.CleanCVPercent) || 0]));
+  const thresholdPct = (threshold / maxValue * 100).toFixed(2);
 
   dom.cvChart.innerHTML = "";
   topRows.forEach((row) => {
     const chartRow = document.createElement("div");
     chartRow.className = "chart-bar-row";
-    const label = `${row.PlateSequenceName} | ${row.BatchName} | ${row.WellId} | ${row.ChemistryId}`;
+    const label = `${row.WellId} · ${row.ChemistryId} · ${row.PlateSequenceName} · ${row.BatchName}`;
+    const rawPct = Math.max(0, Number(row.RawCVPercent) || 0) / maxValue * 100;
+    const cleanPct = Math.max(0, Number(row.CleanCVPercent) || 0) / maxValue * 100;
     chartRow.innerHTML = `
       <div class="chart-label">${escapeHtml(label)}</div>
-      <div class="bar-track" title="Raw CV ${row.RawCVPercent}">
-        <div class="bar-fill raw" style="width:${Math.max(0, Number(row.RawCVPercent) || 0) / maxValue * 100}%"></div>
+      <div class="bar-track" title="Raw CV: ${row.RawCVPercent}%">
+        <div class="bar-fill raw" style="width:${rawPct}%"></div>
+        <div class="bar-track-threshold" style="left:${thresholdPct}%"></div>
       </div>
-      <div class="bar-track" title="Clean CV ${row.CleanCVPercent}">
-        <div class="bar-fill clean" style="width:${Math.max(0, Number(row.CleanCVPercent) || 0) / maxValue * 100}%"></div>
+      <div class="bar-track" title="Cleaned CV: ${row.CleanCVPercent}%">
+        <div class="bar-fill clean" style="width:${cleanPct}%"></div>
+        <div class="bar-track-threshold" style="left:${thresholdPct}%"></div>
       </div>
     `;
     dom.cvChart.appendChild(chartRow);
@@ -534,6 +547,7 @@ function renderTable(table, rows, options = {}) {
     table.innerHTML = "<thead><tr><th>No rows</th></tr></thead><tbody><tr><td>No data available.</td></tr></tbody>";
     return;
   }
+  const truncated = rows.length > limit;
   const visibleRows = rows.slice(0, limit);
   const columns = Object.keys(visibleRows[0]);
   const thead = `<thead><tr>${columns.map((column) => `<th>${escapeHtml(column)}</th>`).join("")}</tr></thead>`;
@@ -547,7 +561,10 @@ function renderTable(table, rows, options = {}) {
     }).join("");
     return `<tr>${cells}</tr>`;
   }).join("");
-  table.innerHTML = `${thead}<tbody>${tbodyRows}</tbody>`;
+  const truncationNote = truncated
+    ? `<tfoot><tr><td colspan="${columns.length}" style="text-align:center;font-style:italic;color:#888;">Showing ${limit} of ${rows.length} rows. Download the CSV for the full dataset.</td></tr></tfoot>`
+    : "";
+  table.innerHTML = `${thead}<tbody>${tbodyRows}</tbody>${truncationNote}`;
 }
 
 function renderFlag(condition, label) {
@@ -739,6 +756,125 @@ function escapeHtml(value) {
 
 function numberOrNegInf(value) {
   return Number.isFinite(value) ? value : Number.NEGATIVE_INFINITY;
+}
+
+// ─── Quick Results table ─────────────────────────────────────────────────────
+
+function statusOrder(row) {
+  if (!row.ReviewRequired) return 3;
+  if (!row.PassesCVThresholdAfterCleaning) return 0;
+  if (row.OutlierDetected) return 1;
+  return 2;
+}
+
+function statusLabel(row) {
+  if (!row.ReviewRequired) return "PASS";
+  if (!row.PassesCVThresholdAfterCleaning) return "FAIL";
+  if (row.OutlierDetected) return "CLEANED";
+  return "REVIEW";
+}
+
+function statusBadgeHtml(row) {
+  const label = statusLabel(row);
+  const cls = { PASS: "status-pass", FAIL: "status-fail", CLEANED: "status-cleaned", REVIEW: "status-review" }[label];
+  return `<span class="status-badge ${cls}">${label}</span>`;
+}
+
+function rowStatusClass(row) {
+  return { PASS: "row-pass", FAIL: "row-fail", CLEANED: "row-cleaned", REVIEW: "row-review" }[statusLabel(row)];
+}
+
+function formatReason(row) {
+  const flags = [];
+  if (row.IsOutlierModifiedZ) flags.push("ModZ");
+  if (row.IsOutlierIQR) flags.push("IQR");
+  if (row.IsLeaveOneOutCandidate) flags.push("LOO");
+  const base = flags.length ? flags.join(" + ") : "High CV";
+  return row.RecommendedDiscard ? `${base} → Discard` : base;
+}
+
+function renderQuickResults(summary, config) {
+  const threshold = config?.cvThreshold ?? 5;
+  const sorted = [...summary].sort((a, b) => (
+    statusOrder(a) - statusOrder(b)
+    || String(a.WellId).localeCompare(String(b.WellId))
+    || String(a.ChemistryId).localeCompare(String(b.ChemistryId))
+  ));
+
+  if (!sorted.length) {
+    dom.quickResultsTable.innerHTML = "<thead><tr><th>No data</th></tr></thead><tbody><tr><td>No results available.</td></tr></tbody>";
+    return;
+  }
+
+  const columns = ["Status", "Well", "Chemistry", "Plate", "Batch", "n", "Mean \u00b1 SD", "CV %"];
+  const thead = `<thead><tr>${columns.map((c) => `<th>${escapeHtml(c)}</th>`).join("")}</tr></thead>`;
+
+  const tbodyRows = sorted.map((row) => {
+    const kept = row.ReplicateCount - (row.DiscardedReplicateCount || 0);
+    const total = row.ReplicateCount;
+    const cleanMean = Number(row.CleanMean);
+    const cleanStd = Number(row.CleanStd);
+    const cleanCV = Number(row.CleanCVPercent);
+
+    const nCell = kept < total ? `${kept}/<span style="opacity:.6">${total}</span>` : String(total);
+    const meanSd = Number.isFinite(cleanMean)
+      ? `${cleanMean.toFixed(4)}<span class="sd-sep">\u00b1</span>${Number.isFinite(cleanStd) ? cleanStd.toFixed(4) : "\u2014"}`
+      : "\u2014";
+    const cvCell = Number.isFinite(cleanCV)
+      ? `<span class="${cleanCV > threshold ? "cv-high" : "cv-ok"}">${cleanCV.toFixed(2)}</span>`
+      : "\u2014";
+
+    const cls = rowStatusClass(row);
+    const cells = [
+      statusBadgeHtml(row),
+      escapeHtml(String(row.WellId)),
+      escapeHtml(String(row.ChemistryId)),
+      escapeHtml(String(row.PlateSequenceName)),
+      escapeHtml(String(row.BatchName)),
+      nCell,
+      meanSd,
+      cvCell,
+    ].map((v) => `<td>${v}</td>`).join("");
+
+    return `<tr class="${cls}">${cells}</tr>`;
+  }).join("");
+
+  dom.quickResultsTable.innerHTML = `${thead}<tbody>${tbodyRows}</tbody>`;
+}
+
+function copyResultsTable() {
+  if (!state.outputs) return;
+  const { summary, config } = state.outputs;
+  const threshold = config?.cvThreshold ?? 5;
+  const header = ["Well", "Chemistry", "Plate", "Batch", "n", "Mean", "\u00b1SD", "CV%", "Status"].join("\t");
+  const rows = [...summary]
+    .sort((a, b) => statusOrder(a) - statusOrder(b) || String(a.WellId).localeCompare(String(b.WellId)))
+    .map((row) => {
+      const kept = row.ReplicateCount - (row.DiscardedReplicateCount || 0);
+      const total = row.ReplicateCount;
+      return [
+        row.WellId,
+        row.ChemistryId,
+        row.PlateSequenceName,
+        row.BatchName,
+        kept < total ? `${kept}/${total}` : String(total),
+        Number.isFinite(Number(row.CleanMean)) ? Number(row.CleanMean).toFixed(4) : "",
+        Number.isFinite(Number(row.CleanStd)) ? Number(row.CleanStd).toFixed(4) : "",
+        Number.isFinite(Number(row.CleanCVPercent)) ? Number(row.CleanCVPercent).toFixed(2) : "",
+        statusLabel(row),
+      ].join("\t");
+    });
+
+  const text = [header, ...rows].join("\n");
+  const btn = dom.copyResultsBtn;
+  const orig = btn.textContent;
+  navigator.clipboard.writeText(text).then(() => {
+    btn.textContent = "Copied!";
+    setTimeout(() => { btn.textContent = orig; }, 2000);
+  }).catch(() => {
+    btn.textContent = "Copy failed";
+    setTimeout(() => { btn.textContent = orig; }, 2000);
+  });
 }
 
 initializeApp();

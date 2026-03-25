@@ -32,6 +32,8 @@
     </header>
 
     <main class="main-grid">
+
+      <!-- Upload -->
       <section class="panel intake-panel">
         <div class="panel-head">
           <h2>Input</h2>
@@ -68,6 +70,7 @@
         <div class="status-box" id="status-box">Waiting for BioSample files.</div>
       </section>
 
+      <!-- Expected CSV + methodology -->
       <section class="panel info-panel">
         <div class="panel-head">
           <h2>Expected CSV</h2>
@@ -85,8 +88,24 @@
           are incorporated into metadata and QC context when present.
         </p>
         <div class="manifest-preview" id="manifest-preview"></div>
+        <details class="method-accordion">
+          <summary>How are outliers detected?</summary>
+          <div class="method-body">
+            <p>Three independent statistical tests run on each replicate group (≥ 3 replicates required). A replicate is recommended for discard when it accumulates enough flags (configurable via <em>Consensus signals</em>).</p>
+            <dl>
+              <dt>Modified Z-Score</dt>
+              <dd>Uses the median and MAD (median absolute deviation) — robust to non-normal distributions. Flags a replicate if |0.6745 × (value − median) / MAD| exceeds the threshold.</dd>
+              <dt>IQR Fence</dt>
+              <dd>Flags values that fall outside Q1 − multiplier × IQR or Q3 + multiplier × IQR. Requires a non-zero IQR.</dd>
+              <dt>Leave-One-Out CV</dt>
+              <dd>Tests whether removing each replicate reduces the group CV below the threshold. Only the replicate whose removal gives the greatest improvement is a candidate.</dd>
+            </dl>
+            <p>The <strong>cleaned mean/SD</strong> is computed after applying the recommended discard. Groups are marked <strong>REVIEW</strong> if no single outlier is identified but CV still exceeds the threshold.</p>
+          </div>
+        </details>
       </section>
 
+      <!-- Run summary KPIs -->
       <section class="panel kpi-panel hidden" id="kpi-panel">
         <div class="panel-head">
           <h2>Run Summary</h2>
@@ -95,43 +114,67 @@
         <div class="kpi-grid" id="kpi-grid"></div>
       </section>
 
+      <!-- Quick Results — primary output -->
+      <section class="panel quick-results-panel hidden" id="quick-results-panel">
+        <div class="panel-head">
+          <div>
+            <h2>Results</h2>
+            <p>Cleaned mean ± SD per replicate group. Flagged groups appear first.</p>
+          </div>
+          <button id="copy-results-btn" class="secondary">Copy for Excel</button>
+        </div>
+        <div class="downloads-strip">
+          <span class="downloads-label">Download</span>
+          <button id="download-summary" class="dl-btn">Summary CSV</button>
+          <button id="download-measurements" class="dl-btn">Measurements CSV</button>
+          <button id="download-outliers" class="dl-btn">Outliers CSV</button>
+          <button id="download-manifest" class="dl-btn">Manifest CSV</button>
+        </div>
+        <div class="table-wrap">
+          <table id="quick-results-table"></table>
+        </div>
+      </section>
+
+      <!-- CV variability chart (full width) -->
       <section class="panel chart-panel hidden" id="chart-panel">
         <div class="panel-head">
           <h2>Variability Snapshot</h2>
-          <p>Top replicate groups by raw CV with cleaned CV after recommended discard.</p>
+          <p>Top replicate groups by raw CV, with cleaned CV after recommended discard. Red line marks the CV threshold.</p>
+        </div>
+        <div class="chart-legend">
+          <span class="legend-raw">Raw CV</span>
+          <span class="legend-clean">Cleaned CV</span>
+          <span class="legend-threshold">CV threshold</span>
         </div>
         <div id="cv-chart" class="chart-wrap"></div>
       </section>
 
-      <section class="panel results-panel hidden" id="results-panel">
-        <div class="panel-head">
-          <h2>Summary Table</h2>
-          <p>Mean, SD, CV and cleaned values by plate, batch, well and chemistry.</p>
-        </div>
-        <div class="toolbar">
-          <input id="summary-search" type="search" placeholder="Filter summary table">
-          <div class="button-row compact">
-            <button id="download-summary" class="secondary">Export Summary CSV</button>
-            <button id="download-measurements" class="secondary">Export Measurements CSV</button>
-            <button id="download-outliers" class="secondary">Export Outliers CSV</button>
-            <button id="download-manifest" class="secondary">Export Manifest CSV</button>
-          </div>
-        </div>
-        <div class="table-wrap">
-          <table id="summary-table"></table>
-        </div>
-      </section>
-
+      <!-- Flagged replicates (with reason) -->
       <section class="panel flags-panel hidden" id="flags-panel">
         <div class="panel-head">
           <h2>Flagged Replicates</h2>
-          <p>Rows that require review or are recommended for discard.</p>
+          <p>Individual replicates that triggered review or are recommended for discard.</p>
         </div>
         <div class="table-wrap">
           <table id="outliers-table"></table>
         </div>
       </section>
 
+      <!-- Full QC summary -->
+      <section class="panel results-panel hidden" id="results-panel">
+        <div class="panel-head">
+          <h2>Full QC Summary</h2>
+          <p>All group-level statistics including raw and cleaned values.</p>
+        </div>
+        <div class="toolbar">
+          <input id="summary-search" type="search" placeholder="Filter summary table">
+        </div>
+        <div class="table-wrap">
+          <table id="summary-table"></table>
+        </div>
+      </section>
+
+      <!-- Annotated measurements -->
       <section class="panel detail-panel hidden" id="detail-panel">
         <div class="panel-head">
           <h2>Annotated Measurements</h2>
@@ -141,6 +184,7 @@
           <table id="measurements-table"></table>
         </div>
       </section>
+
     </main>
   </div>
   <script src="assets/app.js"></script>
