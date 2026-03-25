@@ -1,0 +1,27 @@
+# Environments
+venv/
+.venv/
+env/
+.env/
+
+# Python cache
+__pycache__/
+*.pyc
+
+# YSI raw data (optional, but good practice so you don't commit big CSVs by accident)
+BioSample*.csv
+BioCalibration*.csv
+ISESample*.csv
+ISECalibration*.csv
+
+# Output files
+ysi_resultados_procesados.csv
+ysi_variacion_muestras.png
+ysi_measurements_annotated.csv
+ysi_summary.csv
+ysi_outliers.csv
+ysi_file_manifest.csv
+ysi_cv_overview.png
+ysi_flagged_replicates.png
+ysi_quality_report.html
+demo_output/
