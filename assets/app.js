@@ -57,13 +57,10 @@ const dom = {
   kpiGrid: document.getElementById("kpi-grid"),
   chartPanel: document.getElementById("chart-panel"),
   cvChart: document.getElementById("cv-chart"),
-  resultsPanel: document.getElementById("results-panel"),
   flagsPanel: document.getElementById("flags-panel"),
-  detailPanel: document.getElementById("detail-panel"),
-  summaryTable: document.getElementById("summary-table"),
+  measurementsDetails: document.getElementById("measurements-details"),
   outliersTable: document.getElementById("outliers-table"),
   measurementsTable: document.getElementById("measurements-table"),
-  summarySearch: document.getElementById("summary-search"),
   downloadSummary: document.getElementById("download-summary"),
   downloadMeasurements: document.getElementById("download-measurements"),
   downloadOutliers: document.getElementById("download-outliers"),
@@ -77,7 +74,6 @@ function initializeApp() {
   dom.fileInput.addEventListener("change", (event) => setFiles(Array.from(event.target.files || [])));
   dom.processButton.addEventListener("click", processFiles);
   dom.loadDemoButton.addEventListener("click", loadDemoGuide);
-  dom.summarySearch.addEventListener("input", renderSummaryTable);
   dom.downloadSummary.addEventListener("click", () => downloadOutput("summary", "ysi_summary.csv"));
   dom.downloadMeasurements.addEventListener("click", () => downloadOutput("measurements", "ysi_measurements_annotated.csv"));
   dom.downloadOutliers.addEventListener("click", () => downloadOutput("outliers", "ysi_outliers.csv"));
@@ -436,9 +432,8 @@ function renderOutputs() {
   dom.kpiPanel.classList.remove("hidden");
   dom.quickResultsPanel.classList.remove("hidden");
   dom.chartPanel.classList.remove("hidden");
-  dom.resultsPanel.classList.remove("hidden");
   dom.flagsPanel.classList.remove("hidden");
-  dom.detailPanel.classList.remove("hidden");
+  dom.measurementsDetails.classList.remove("hidden");
 
   const flaggedGroups = summary.filter((row) => row.ReviewRequired).length;
   const discardCount = summary.reduce((total, row) => total + Number(row.DiscardedReplicateCount || 0), 0);
@@ -459,7 +454,6 @@ function renderOutputs() {
   renderManifestPreview(manifest);
   renderQuickResults(summary, config);
   renderCvChart(summary, config);
-  renderSummaryTable();
   renderTable(dom.outliersTable, outliers, { limit: 150 });
   renderTable(dom.measurementsTable, measurements.map(formatMeasurementRow), { limit: 300 });
 }
@@ -507,22 +501,6 @@ function renderCvChart(summary, config) {
     `;
     dom.cvChart.appendChild(chartRow);
   });
-}
-
-function renderSummaryTable() {
-  if (!state.outputs) {
-    return;
-  }
-  const query = dom.summarySearch.value.trim().toLowerCase();
-  const rows = state.outputs.summary
-    .filter((row) => !query || Object.values(row).some((value) => String(value).toLowerCase().includes(query)))
-    .map((row) => ({
-      ...row,
-      ReviewRequired: renderFlag(Boolean(row.ReviewRequired), "Review"),
-      OutlierDetected: renderFlag(Boolean(row.OutlierDetected), "Outlier"),
-      PassesCVThresholdAfterCleaning: renderFlag(Boolean(row.PassesCVThresholdAfterCleaning), "Pass"),
-    }));
-  renderTable(dom.summaryTable, rows, { rawHtml: true, limit: 250 });
 }
 
 function formatMeasurementRow(row) {
@@ -573,12 +551,6 @@ function renderTable(table, rows, options = {}) {
     ? `<tfoot><tr><td colspan="${columns.length}" style="text-align:center;font-style:italic;color:#888;">Showing ${limit} of ${rows.length} rows. Download the CSV for the full dataset.</td></tr></tfoot>`
     : "";
   table.innerHTML = `${thead}<tbody>${tbodyRows}</tbody>${truncationNote}`;
-}
-
-function renderFlag(condition, label) {
-  const className = condition ? "flag-chip flag-review" : "flag-chip flag-ok";
-  const text = condition ? label : "OK";
-  return `<span class="${className}">${escapeHtml(text)}</span>`;
 }
 
 function downloadOutput(kind, fileName) {
