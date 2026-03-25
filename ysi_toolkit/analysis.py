@@ -23,6 +23,7 @@ OPTIONAL_COLUMN_ALIASES: dict[str, list[str]] = {
     "sample": ["SampleSequenceName", "SampleName", "SampleId", "SampleID"],
     "timestamp": ["DateTime", "Timestamp", "Date"],
     "error": ["Error", "ErrorMessage", "SensorStatus", "InstrumentStatus"],
+    "units": ["Units", "Unit", "MeasurementUnits", "Measurement Units"],
 }
 
 
@@ -89,6 +90,8 @@ def prepare_measurements(data: pd.DataFrame, columns: dict[str, str]) -> pd.Data
         frame.rename(columns={columns["timestamp"]: "Timestamp"}, inplace=True)
     if "state" in columns and columns["state"] != "CompletionState":
         frame.rename(columns={columns["state"]: "CompletionState"}, inplace=True)
+    if "units" in columns and columns["units"] != "Unit":
+        frame.rename(columns={columns["units"]: "Unit"}, inplace=True)
 
     return frame
 
@@ -214,6 +217,8 @@ def build_summary(annotated: pd.DataFrame, config: ProcessingConfig) -> pd.DataF
         record["PassesCVThresholdAfterCleaning"] = bool(
             pd.notna(record["CleanCVPercent"]) and record["CleanCVPercent"] <= config.cv_threshold
         )
+        if "Unit" in group.columns:
+            record["Unit"] = _join_unique(group["Unit"])
         if "SampleSequenceName" in group.columns:
             record["SampleSequenceNames"] = _join_unique(group["SampleSequenceName"])
         if "Timestamp" in group.columns:

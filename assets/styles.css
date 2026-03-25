@@ -643,3 +643,46 @@ tbody tr:nth-child(even) {
   border-radius: 1px;
   z-index: 1;
 }
+
+/* ─── Pivoted results table ─────────────────────────────── */
+
+/* Chemistry group header (top row of two-row thead) */
+.chem-group-header {
+  text-align: center;
+  background: rgba(15, 118, 110, 0.10);
+  border-left: 2px solid rgba(15, 118, 110, 0.28);
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+/* Sub-headers: Mean / SD / CV% / Status */
+.chem-sub-header {
+  text-align: center;
+  font-weight: 600;
+  font-size: 0.82rem;
+  color: var(--muted);
+  background: rgba(15, 118, 110, 0.05);
+}
+
+/* Left border on the first data cell of each chemistry group */
+.chem-col-first {
+  border-left: 2px solid rgba(15, 118, 110, 0.18);
+}
+
+/* Well ID cell — slightly bolder */
+.well-id-cell {
+  white-space: nowrap;
+}
+
+/* Empty chemistry slot (—) */
+td.no-data {
+  text-align: center;
+  color: var(--muted);
+  font-style: italic;
+  border-left: 2px solid rgba(15, 118, 110, 0.18);
+}
+
+/* Center-align numeric cells in the pivoted table */
+#quick-results-table td:not(.well-id-cell):not([colspan]) {
+  text-align: center;
+}

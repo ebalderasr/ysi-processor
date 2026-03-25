@@ -11,7 +11,11 @@ const OPTIONAL_COLUMN_ALIASES = {
   sample: ["SampleSequenceName", "SampleName", "SampleId", "SampleID"],
   timestamp: ["LocalCompletionTime", "DateTime", "Timestamp", "Date"],
   error: ["Errors", "Error", "ErrorMessage", "SensorStatus", "InstrumentStatus"],
+  units: ["Units", "Unit", "MeasurementUnits", "Measurement Units"],
 };
+
+// Preferred display order for chemistry analytes
+const CHEMISTRY_ORDER = ["Glucose", "Lactate", "Glutamine", "Glutamate"];
 
 const METADATA_COLUMNS = [
   "SourceFile",
@@ -232,6 +236,9 @@ function prepareMeasurements(rows, columns) {
     if (columns.error) {
       normalized.ErrorInfo = row[columns.error] || "";
     }
+    if (columns.units) {
+      normalized.Unit = String(row[columns.units] || "").trim();
+    }
 
     const counterKey = groupKey(normalized);
     const nextIndex = (groupCounters.get(counterKey) || 0) + 1;
@@ -375,6 +382,7 @@ function buildSummary(annotated, config) {
         ReviewRequired: Boolean(first.ReviewRequired),
         OutlierDetected: discarded.length > 0,
         PassesCVThresholdAfterCleaning: Number.isFinite(cleanCV) && cleanCV <= config.cvThreshold,
+        Unit: joinUnique(group.map((row) => row.Unit).filter(Boolean)),
         SampleSequenceNames: joinUnique(group.map((row) => row.SampleSequenceName).filter(Boolean)),
         Timestamps: joinUnique(group.map((row) => row.Timestamp).filter(Boolean)),
         SourceFiles: joinUnique(group.map((row) => row.SourceFile).filter(Boolean)),
@@ -793,50 +801,102 @@ function formatReason(row) {
   return row.RecommendedDiscard ? `${base} → Discard` : base;
 }
 
+function buildWellPivot(summary) {
+  // Determine sorted chemistry list (preferred order first, then alphabetical)
+  const rawChemistries = [...new Set(summary.map((r) => r.ChemistryId))];
+  const sortedChemistries = [
+    ...CHEMISTRY_ORDER.filter((c) => rawChemistries.some((rc) => rc.toLowerCase() === c.toLowerCase())),
+    ...rawChemistries.filter((c) => !CHEMISTRY_ORDER.some((oc) => oc.toLowerCase() === c.toLowerCase())).sort(),
+  ];
+
+  // Unit per chemistry (first non-empty value found)
+  const chemUnit = {};
+  sortedChemistries.forEach((chem) => {
+    const match = summary.find((r) => r.ChemistryId === chem && r.Unit);
+    chemUnit[chem] = match ? match.Unit : "";
+  });
+
+  // Pivot: (Plate||Batch||Well) → { meta, data: {ChemistryId → summaryRow} }
+  const wellMap = new Map();
+  summary.forEach((row) => {
+    const key = [row.PlateSequenceName, row.BatchName, row.WellId].join("||");
+    if (!wellMap.has(key)) wellMap.set(key, { meta: row, data: {} });
+    wellMap.get(key).data[row.ChemistryId] = row;
+  });
+
+  // Sort wells by Plate → Batch → Well (natural sort)
+  const sortedKeys = [...wellMap.keys()].sort((a, b) => {
+    const [pa, ba, wa] = a.split("||");
+    const [pb, bb, wb] = b.split("||");
+    return pa.localeCompare(pb) || ba.localeCompare(bb) || wa.localeCompare(wb);
+  });
+
+  return { sortedChemistries, chemUnit, wellMap, sortedKeys };
+}
+
 function renderQuickResults(summary, config) {
   const threshold = config?.cvThreshold ?? 5;
-  const sorted = [...summary].sort((a, b) => (
-    statusOrder(a) - statusOrder(b)
-    || String(a.WellId).localeCompare(String(b.WellId))
-    || String(a.ChemistryId).localeCompare(String(b.ChemistryId))
-  ));
 
-  if (!sorted.length) {
+  if (!summary.length) {
     dom.quickResultsTable.innerHTML = "<thead><tr><th>No data</th></tr></thead><tbody><tr><td>No results available.</td></tr></tbody>";
     return;
   }
 
-  const columns = ["Status", "Well", "Chemistry", "Plate", "Batch", "n", "Mean \u00b1 SD", "CV %"];
-  const thead = `<thead><tr>${columns.map((c) => `<th>${escapeHtml(c)}</th>`).join("")}</tr></thead>`;
+  const { sortedChemistries, chemUnit, wellMap, sortedKeys } = buildWellPivot(summary);
 
-  const tbodyRows = sorted.map((row) => {
-    const kept = row.ReplicateCount - (row.DiscardedReplicateCount || 0);
-    const total = row.ReplicateCount;
-    const cleanMean = Number(row.CleanMean);
-    const cleanStd = Number(row.CleanStd);
-    const cleanCV = Number(row.CleanCVPercent);
+  // Two-row header: meta cols (rowspan=2) + chemistry group headers (colspan=4) / sub-headers
+  const metaHeadersHtml = ["Well", "Plate", "Batch"]
+    .map((h) => `<th rowspan="2">${escapeHtml(h)}</th>`)
+    .join("");
 
-    const nCell = kept < total ? `${kept}/<span style="opacity:.6">${total}</span>` : String(total);
-    const meanSd = Number.isFinite(cleanMean)
-      ? `${cleanMean.toFixed(4)}<span class="sd-sep">\u00b1</span>${Number.isFinite(cleanStd) ? cleanStd.toFixed(4) : "\u2014"}`
-      : "\u2014";
-    const cvCell = Number.isFinite(cleanCV)
-      ? `<span class="${cleanCV > threshold ? "cv-high" : "cv-ok"}">${cleanCV.toFixed(2)}</span>`
-      : "\u2014";
+  const chemGroupHeadersHtml = sortedChemistries.map((chem, ci) => {
+    const unit = chemUnit[chem] ? ` (${escapeHtml(chemUnit[chem])})` : "";
+    const borderCls = ci > 0 ? " chem-group-header" : "chem-group-header";
+    return `<th colspan="4" class="${borderCls}">${escapeHtml(chem)}${unit}</th>`;
+  }).join("");
 
-    const cls = rowStatusClass(row);
-    const cells = [
-      statusBadgeHtml(row),
-      escapeHtml(String(row.WellId)),
-      escapeHtml(String(row.ChemistryId)),
-      escapeHtml(String(row.PlateSequenceName)),
-      escapeHtml(String(row.BatchName)),
-      nCell,
-      meanSd,
-      cvCell,
-    ].map((v) => `<td>${v}</td>`).join("");
+  const subHeadersHtml = sortedChemistries.map(() =>
+    `<th class="chem-sub-header">Mean</th><th class="chem-sub-header">SD</th><th class="chem-sub-header">CV%</th><th class="chem-sub-header">Status</th>`
+  ).join("");
 
-    return `<tr class="${cls}">${cells}</tr>`;
+  const thead = `<thead>
+    <tr>${metaHeadersHtml}${chemGroupHeadersHtml}</tr>
+    <tr>${subHeadersHtml}</tr>
+  </thead>`;
+
+  // Body rows
+  const tbodyRows = sortedKeys.map((key) => {
+    const { meta, data } = wellMap.get(key);
+
+    // Worst status across all chemistries determines row highlight
+    const statusOrders = sortedChemistries.map((c) => data[c] ? statusOrder(data[c]) : 3);
+    const worstOrder = Math.min(...statusOrders);
+    const rowCls = ["row-fail", "row-review", "row-cleaned", "row-pass"][worstOrder] ?? "row-pass";
+
+    const metaCells = [
+      `<td class="well-id-cell"><strong>${escapeHtml(meta.WellId)}</strong></td>`,
+      `<td>${escapeHtml(meta.PlateSequenceName)}</td>`,
+      `<td>${escapeHtml(meta.BatchName)}</td>`,
+    ].join("");
+
+    const chemCells = sortedChemistries.map((chem, ci) => {
+      const row = data[chem];
+      const borderAttr = ci > 0 ? ` class="chem-col-first"` : "";
+      if (!row) {
+        return `<td${borderAttr} class="no-data" colspan="4">—</td>`;
+      }
+      const cleanMean = Number(row.CleanMean);
+      const cleanStd = Number(row.CleanStd);
+      const cleanCV = Number(row.CleanCVPercent);
+      const meanCell = Number.isFinite(cleanMean) ? cleanMean.toFixed(4) : "—";
+      const sdCell = Number.isFinite(cleanStd) ? cleanStd.toFixed(4) : "—";
+      const cvCell = Number.isFinite(cleanCV)
+        ? `<span class="${cleanCV > threshold ? "cv-high" : "cv-ok"}">${cleanCV.toFixed(2)}</span>`
+        : "—";
+      return `<td${borderAttr}>${meanCell}</td><td>${sdCell}</td><td>${cvCell}</td><td>${statusBadgeHtml(row)}</td>`;
+    }).join("");
+
+    return `<tr class="${rowCls}">${metaCells}${chemCells}</tr>`;
   }).join("");
 
   dom.quickResultsTable.innerHTML = `${thead}<tbody>${tbodyRows}</tbody>`;
@@ -845,27 +905,40 @@ function renderQuickResults(summary, config) {
 function copyResultsTable() {
   if (!state.outputs) return;
   const { summary, config } = state.outputs;
-  const threshold = config?.cvThreshold ?? 5;
-  const header = ["Well", "Chemistry", "Plate", "Batch", "n", "Mean", "\u00b1SD", "CV%", "Status"].join("\t");
-  const rows = [...summary]
-    .sort((a, b) => statusOrder(a) - statusOrder(b) || String(a.WellId).localeCompare(String(b.WellId)))
-    .map((row) => {
-      const kept = row.ReplicateCount - (row.DiscardedReplicateCount || 0);
-      const total = row.ReplicateCount;
-      return [
-        row.WellId,
-        row.ChemistryId,
-        row.PlateSequenceName,
-        row.BatchName,
-        kept < total ? `${kept}/${total}` : String(total),
-        Number.isFinite(Number(row.CleanMean)) ? Number(row.CleanMean).toFixed(4) : "",
-        Number.isFinite(Number(row.CleanStd)) ? Number(row.CleanStd).toFixed(4) : "",
-        Number.isFinite(Number(row.CleanCVPercent)) ? Number(row.CleanCVPercent).toFixed(2) : "",
-        statusLabel(row),
-      ].join("\t");
-    });
+  const { sortedChemistries, chemUnit, wellMap, sortedKeys } = buildWellPivot(summary);
 
-  const text = [header, ...rows].join("\n");
+  // Header row: Well, Plate, Batch, then per-chemistry columns
+  const headerCols = ["Well", "Plate", "Batch"];
+  sortedChemistries.forEach((chem) => {
+    const unit = chemUnit[chem] ? ` (${chemUnit[chem]})` : "";
+    headerCols.push(
+      `${chem}${unit} Mean`,
+      `${chem}${unit} SD`,
+      `${chem} CV%`,
+      `${chem} Status`,
+    );
+  });
+
+  const rows = sortedKeys.map((key) => {
+    const { meta, data } = wellMap.get(key);
+    const cols = [meta.WellId, meta.PlateSequenceName, meta.BatchName];
+    sortedChemistries.forEach((chem) => {
+      const row = data[chem];
+      if (!row) {
+        cols.push("", "", "", "");
+      } else {
+        cols.push(
+          Number.isFinite(Number(row.CleanMean)) ? Number(row.CleanMean).toFixed(4) : "",
+          Number.isFinite(Number(row.CleanStd)) ? Number(row.CleanStd).toFixed(4) : "",
+          Number.isFinite(Number(row.CleanCVPercent)) ? Number(row.CleanCVPercent).toFixed(2) : "",
+          statusLabel(row),
+        );
+      }
+    });
+    return cols.join("\t");
+  });
+
+  const text = [headerCols.join("\t"), ...rows].join("\n");
   const btn = dom.copyResultsBtn;
   const orig = btn.textContent;
   navigator.clipboard.writeText(text).then(() => {
