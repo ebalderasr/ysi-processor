@@ -1,51 +1,60 @@
-# YSI Processor Live
-> **A browser-first GitHub Pages app for YSI 2950 BioSample QC, replicate averaging, SD reporting, and export-ready results.**
+<div align="center">
 
-YSI Processor Live is a static web app designed to run directly from **GitHub Pages**.
+# YSI Processor
 
-The user opens the page, uploads one or more `BioSample*.csv` files exported by the **YSI 2950**, and the analysis happens **locally in the browser**:
+### Browser-based YSI 2950 BioSample analysis for replicate QC, means, SD, and export
 
-- no Python installation
-- no virtual environment
-- no command line
-- no server-side upload
+<br>
 
-This repository also keeps the Python engine used to define and validate the analysis workflow, but the primary product is now the **live app**.
+[![Stack](https://img.shields.io/badge/Stack-HTML_·_CSS_·_JavaScript-F97316?style=for-the-badge)]()
+[![Mode](https://img.shields.io/badge/Mode-GitHub_Pages_Live_App-0F766E?style=for-the-badge)]()
+[![Input](https://img.shields.io/badge/Input-BioSample_CSV-155E75?style=for-the-badge)]()
+[![License](https://img.shields.io/badge/License-MIT-blue?style=for-the-badge)](./LICENSE)
 
----
-
-## Live Workflow
-
-1. Open the GitHub Pages site
-2. Drag and drop one or more `BioSample*.csv` files
-3. Review grouped samples and replicate QC
-4. Inspect mean, SD, raw CV, cleaned CV, and flagged replicates
-5. Export results as CSV
-
-Everything runs in the browser session.
+</div>
 
 ---
 
-## What Files Does the App Accept?
+## What is YSI Processor?
 
-The app is built specifically for **YSI 2950 BioSample CSV exports**.
+YSI Processor is a **live web app for analyzing YSI 2950 BioSample exports** directly in the browser.  
+The user opens the page, uploads one or more raw `BioSample*.csv` files, and gets:
 
-### Expected filename pattern
+- grouped technical replicates
+- mean and standard deviation for each sample
+- raw and cleaned CV
+- replicate-level anomaly flags
+- CSV exports for downstream analysis
 
-```text
-BioSample*.csv
-```
+The app is designed for routine metabolite review workflows in **CHO cell culture**, especially when glucose, lactate, and related readings are used for feeding decisions, troubleshooting, or daily process tracking.
 
-Examples:
+There is **no backend and no server-side processing**. The selected files are processed locally in the browser session.
 
-```text
-BioSample_15F000007_24-03-2026_19-49-25.csv
-BioSample_run_02.csv
-```
+---
 
-### Required columns
+## Why it matters
 
-The uploaded CSV must contain these fields:
+YSI workflows often involve repetitive manual review:
+
+- uploading raw exports into notebooks or ad hoc scripts
+- checking whether replicates belong to the same sample or run
+- calculating mean, SD, and CV by hand or in spreadsheets
+- guessing which replicate is the bad one when one reading drifts
+- reformatting results for downstream reports
+
+YSI Processor reduces that friction by giving the user a single browser interface focused on the actual bench question:
+
+**Can I trust this sample, and if not, which replicate should I inspect first?**
+
+---
+
+## How it works
+
+### 1. Upload YSI BioSample files
+
+The app accepts one or more `BioSample*.csv` files exported by the YSI software.
+
+Required fields:
 
 - `PlateSequenceName`
 - `BatchName`
@@ -53,18 +62,89 @@ The uploaded CSV must contain these fields:
 - `ChemistryId`
 - `Concentration`
 
-### Optional fields used when present
+Optional fields such as `CompletionState`, `LocalCompletionTime`, `SampleSequenceName`, and `Errors` are used when present.
 
-- `CompletionState`
-- `LocalCompletionTime`
-- `SampleSequenceName`
-- `Errors`
+### 2. Group replicates correctly
 
-The app uses optional fields to improve filtering, traceability, and review context.
+Rows are grouped only when they share the same:
 
-### Real example header
+- `PlateSequenceName`
+- `BatchName`
+- `WellId`
+- `ChemistryId`
 
-The BioSample exports already tested in this repository contain:
+This prevents accidental mixing of:
+
+- different YSI runs
+- different batches
+- different wells
+- different analytes
+
+### 3. Compute sample statistics
+
+For each grouped sample, the app calculates:
+
+- mean
+- standard deviation
+- replicate count
+- raw CV%
+- cleaned mean / SD / CV after excluding the recommended outlier
+
+### 4. Flag suspicious replicates
+
+The current live app combines:
+
+- raw replicate-group CV
+- modified z-score based on MAD
+- IQR fences
+- leave-one-out CV improvement
+
+This allows the user to review not only **which sample is noisy**, but also **which replicate is the most likely source of the problem**.
+
+### 5. Export results
+
+The app can export:
+
+- `ysi_summary.csv`
+- `ysi_measurements_annotated.csv`
+- `ysi_outliers.csv`
+- `ysi_file_manifest.csv`
+
+---
+
+## Current feature set
+
+| | |
+|---|---|
+| **Live browser workflow** | Use the tool directly from GitHub Pages without installation |
+| **Local-only processing** | Uploaded files stay in the browser session |
+| **Replicate grouping** | Groups by `PlateSequenceName + BatchName + WellId + ChemistryId` |
+| **Sample statistics** | Mean, SD, replicate count, raw CV, and cleaned CV |
+| **Replicate QC** | Flags likely outliers and recommends discards |
+| **Metadata manifest** | Summarizes uploaded files and available metadata fields |
+| **CSV export** | Export summary, outliers, annotated measurements, and manifest |
+| **Local preview** | Run the exact same static app locally from the terminal |
+| **Legacy notebook retained** | `process_ysi.ipynb` remains available for older Colab-based workflows |
+
+---
+
+## Input format
+
+The app expects **YSI 2950 BioSample CSV exports**.
+
+Typical filename pattern:
+
+```text
+BioSample*.csv
+```
+
+Example:
+
+```text
+BioSample_15F000007_24-03-2026_19-49-25.csv
+```
+
+Typical header:
 
 ```text
 PlateSequenceName
@@ -92,106 +172,31 @@ Errors
 
 ---
 
-## How Samples and Replicates Are Grouped
+## How to use it
 
-The app treats rows as belonging to the same replicate group only when they share:
+### Option 1. Use the live app
 
-- `PlateSequenceName`
-- `BatchName`
-- `WellId`
-- `ChemistryId`
-
-This is important because it prevents accidental mixing of:
-
-- different YSI runs or batches
-- different wells
-- different analytes such as glucose and lactate
-- different plate sequences
-
----
-
-## What the User Gets
-
-After processing the uploaded files, the app calculates:
-
-- **mean** for each grouped sample
-- **standard deviation (SD)** for each grouped sample
-- **raw CV%**
-- **cleaned mean / SD / CV%** after excluding the recommended outlier
-- **replicate-level anomaly flags**
-
-The UI exposes:
-
-- a summary table by sample
-- a flagged replicate table
-- an annotated measurement table
-- a manifest of uploaded files and metadata
-
-The user can export:
-
-- `ysi_summary.csv`
-- `ysi_measurements_annotated.csv`
-- `ysi_outliers.csv`
-- `ysi_file_manifest.csv`
-
----
-
-## Outlier Detection Logic
-
-The browser app uses the same analytical logic implemented for the Python engine:
-
-- raw replicate-group **CV%**
-- **modified z-score** based on MAD
-- **IQR fences**
-- **leave-one-out CV improvement**
-
-This means the app does more than say “this well looks noisy”.
-
-It tries to identify:
-
-- whether the replicate group needs review
-- whether one replicate is the most likely bad measurement
-- whether removing that replicate improves the group to an acceptable CV
-
----
-
-## Repository Layout
+Open:
 
 ```text
-ysi-processor/
-├── index.html
-├── assets/
-│   ├── app.js
-│   └── styles.css
-├── ysi_toolkit/
-│   ├── analysis.py
-│   ├── io.py
-│   ├── pipeline.py
-│   └── ...
-├── tests/
-├── ysi_processor.py
-└── README.md
+https://ebalderasr.github.io/ysi-processor/
 ```
 
-### Browser app
+Then:
 
-- `index.html`: GitHub Pages entry point
-- `assets/app.js`: in-browser BioSample parser, QC engine, rendering, and CSV export
-- `assets/styles.css`: UI styling
+1. Upload one or more `BioSample*.csv` files
+2. Review the summary table and flagged replicates
+3. Export the processed CSV outputs
 
-### Python engine
+This is the main intended workflow.
 
-- `ysi_toolkit/`: Python implementation of the processing logic
-- `ysi_processor.py`: CLI entry point for offline validation and development
-- `tests/`: Python tests for the engine
+### Option 2. Run it locally from the terminal as a static app
 
----
-
-## Local Preview
-
-If you want to preview the app locally without deploying:
+Clone the repository and start a simple local web server:
 
 ```bash
+git clone https://github.com/ebalderasr/ysi-processor.git
+cd ysi-processor
 python3 -m http.server 8000
 ```
 
@@ -201,34 +206,73 @@ Then open:
 http://localhost:8000
 ```
 
-Because the app is static, no build step is required.
+This runs the same live app locally, without any build step.
 
----
+### Option 3. Use the legacy notebook workflow
 
-## GitHub Pages Deployment
+If you still want the older notebook-based approach, this repo keeps:
 
-This repository is structured so the root can be published directly with GitHub Pages.
-
-Typical setup:
-
-1. Go to **Settings**
-2. Open **Pages**
-3. Set source to:
-   - **Deploy from a branch**
-   - branch: `main`
-   - folder: `/ (root)`
-4. Save
-
-GitHub Pages will then serve `index.html` as the live app.
-
----
-
-## Validation
-
-The Python engine is still tested locally with:
-
-```bash
-./.venv/bin/python -m pytest -q
+```text
+process_ysi.ipynb
 ```
 
-This keeps the analytical logic verifiable even though the primary user workflow is now browser-based.
+You can open it in Jupyter or Google Colab and follow the notebook flow.
+
+---
+
+## Project structure
+
+```text
+ysi-processor/
+├── README.md
+├── LICENSE
+├── .nojekyll
+├── index.html                ← GitHub Pages entry point
+├── assets/
+│   ├── app.js                ← in-browser parser, analysis, rendering, export
+│   └── styles.css            ← live app styling
+├── data/
+│   └── Data_test.csv         ← sample input data
+└── process_ysi.ipynb         ← legacy notebook workflow
+```
+
+---
+
+## Deployment
+
+The repository is configured to work as a **GitHub Pages site from `main` and the repository root**.
+
+Expected Pages setup:
+
+1. **Settings**
+2. **Pages**
+3. **Deploy from a branch**
+4. Branch: `main`
+5. Folder: `/ (root)`
+
+GitHub Pages should serve `index.html` as the app entry point.
+
+---
+
+## Author
+
+**Emiliano Balderas Ramírez**  
+Bioengineer · PhD Candidate in Biochemical Sciences  
+Instituto de Biotecnología (IBt), UNAM
+
+[![LinkedIn](https://img.shields.io/badge/LinkedIn-emilianobalderas-0A66C2?style=flat-square&logo=linkedin&logoColor=white)](https://www.linkedin.com/in/emilianobalderas/)
+[![Email](https://img.shields.io/badge/Email-ebalderas%40live.com.mx-D14836?style=flat-square&logo=gmail&logoColor=white)](mailto:ebalderas@live.com.mx)
+
+---
+
+## Related
+
+[**CellSplit**](https://github.com/ebalderasr/CellSplit) — passage planning and split calculations for adherent cell culture workflows.
+
+[**PulseGrowth**](https://github.com/ebalderasr/PulseGrowth) — browser-based growth kinetics and process timing for mammalian cell culture.
+
+[**Clonalyzer 2**](https://github.com/ebalderasr/Clonalyzer-2) — browser-based analysis tools for clone and culture workflows.
+
+---
+
+<div align="center"><i>YSI Processor — upload, review, export.</i></div>
