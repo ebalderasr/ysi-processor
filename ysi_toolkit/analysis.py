@@ -21,7 +21,7 @@ REQUIRED_COLUMN_ALIASES: dict[str, list[str]] = {
 OPTIONAL_COLUMN_ALIASES: dict[str, list[str]] = {
     "state": ["CompletionState", "Status", "ResultState"],
     "sample": ["SampleSequenceName", "SampleName", "SampleId", "SampleID"],
-    "timestamp": ["DateTime", "Timestamp", "Date"],
+    "timestamp": ["LocalCompletionTime", "DateTime", "Timestamp", "Date"],
     "error": ["Error", "ErrorMessage", "SensorStatus", "InstrumentStatus"],
     "units": ["Units", "Unit", "MeasurementUnits", "Measurement Units"],
 }
@@ -71,6 +71,10 @@ def prepare_measurements(data: pd.DataFrame, columns: dict[str, str]) -> pd.Data
         column = columns[logical_name]
         frame[column] = frame[column].astype(str).str.strip()
 
+    if "timestamp" in columns:
+        frame[columns["timestamp"]] = pd.to_datetime(frame[columns["timestamp"]], dayfirst=True, errors="coerce")
+        frame = frame.sort_values(columns["timestamp"]).reset_index(drop=True)
+
     group_cols = [columns["plate"], columns["batch"], columns["well"], columns["chemistry"]]
     frame["ReplicateIndex"] = frame.groupby(group_cols).cumcount() + 1
     frame.rename(
@@ -98,7 +102,7 @@ def prepare_measurements(data: pd.DataFrame, columns: dict[str, str]) -> pd.Data
 
 def annotate_replicates(data: pd.DataFrame, config: ProcessingConfig) -> pd.DataFrame:
     """Compute replicate-level QC metrics and outlier recommendations."""
-    group_cols = ["BatchName", "WellId", "ChemistryId"]
+    group_cols = ["PlateSequenceName", "BatchName", "WellId", "ChemistryId"]
     annotated_groups = [
         _annotate_group(group.copy(), config)
         for _, group in data.groupby(group_cols, sort=True, dropna=False)
@@ -197,14 +201,12 @@ def _annotate_group(group: pd.DataFrame, config: ProcessingConfig) -> pd.DataFra
 
 def build_summary(annotated: pd.DataFrame, config: ProcessingConfig) -> pd.DataFrame:
     """Build group-level summary with raw and cleaned statistics."""
-    group_cols = ["BatchName", "WellId", "ChemistryId"]
+    group_cols = ["PlateSequenceName", "BatchName", "WellId", "ChemistryId"]
     records: list[dict[str, Any]] = []
     for keys, group in annotated.groupby(group_cols, sort=True, dropna=False):
         kept = group.loc[~group["RecommendedDiscard"]]
         discarded = group.loc[group["RecommendedDiscard"]]
         record: dict[str, Any] = dict(zip(group_cols, keys))
-        if "PlateSequenceName" in group.columns:
-            record["PlateSequenceNames"] = _join_unique(group["PlateSequenceName"])
         record["ReplicateCount"] = int(len(group))
         record["DiscardedReplicateCount"] = int(discarded.shape[0])
         record["RecommendedDiscardReplicates"] = _join_replicates(discarded["ReplicateIndex"])
@@ -255,7 +257,7 @@ def build_outlier_table(annotated: pd.DataFrame) -> pd.DataFrame:
     present = [column for column in columns if column in annotated.columns]
     outliers = annotated[(annotated["RecommendedDiscard"]) | (annotated["ReviewRequired"])].copy()
     return outliers[present].sort_values(
-        ["BatchName", "WellId", "ChemistryId", "ReplicateIndex"]
+        ["PlateSequenceName", "BatchName", "WellId", "ChemistryId", "ReplicateIndex"]
     ).reset_index(drop=True)
 
 
