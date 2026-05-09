@@ -47,8 +47,17 @@ const dom = {
   loadDemoButton: document.getElementById("load-demo-button"),
   fileList: document.getElementById("file-list"),
   statusBox: document.getElementById("status-box"),
+  loadingOverlay: document.getElementById("loading-overlay"),
   manifestPreview: document.getElementById("manifest-preview"),
   dropzone: document.getElementById("dropzone"),
+  dzFilename: document.getElementById("dz-filename"),
+  analyzeHint: document.getElementById("analyze-hint"),
+  uploadSection: document.getElementById("upload-section"),
+  resultsSection: document.getElementById("results-section"),
+  newAnalysisBtn: document.getElementById("new-analysis-btn"),
+  qcSettingsGroup: document.getElementById("qc-settings-group"),
+  methodSettingsGroup: document.getElementById("method-settings-group"),
+  downloadOutliersBtn: document.getElementById("download-outliers"),
   cvThreshold: document.getElementById("cv-threshold"),
   modzThreshold: document.getElementById("modz-threshold"),
   iqrMultiplier: document.getElementById("iqr-multiplier"),
@@ -74,6 +83,18 @@ function initializeApp() {
   dom.fileInput.addEventListener("change", (event) => setFiles(Array.from(event.target.files || [])));
   dom.processButton.addEventListener("click", processFiles);
   dom.loadDemoButton.addEventListener("click", loadDemoGuide);
+  dom.newAnalysisBtn.addEventListener("click", showUpload);
+
+  document.querySelectorAll('input[name="analysis-mode"]').forEach((radio) => {
+    radio.addEventListener("change", () => {
+      document.querySelectorAll(".mode-card").forEach((card) => {
+        card.classList.toggle("selected", card.querySelector("input").checked);
+      });
+      const isSimple = getMode() === "simple";
+      if (dom.qcSettingsGroup) dom.qcSettingsGroup.classList.toggle("hidden", isSimple);
+      if (dom.methodSettingsGroup) dom.methodSettingsGroup.classList.toggle("settings-group--muted", isSimple);
+    });
+  });
   dom.downloadSummary.addEventListener("click", () => downloadOutput("summary", "ysi_summary.csv"));
   dom.downloadMeasurements.addEventListener("click", () => downloadOutput("measurements", "ysi_measurements_annotated.csv"));
   dom.downloadOutliers.addEventListener("click", () => downloadOutput("outliers", "ysi_outliers.csv"));
@@ -98,41 +119,78 @@ function initializeApp() {
   });
 }
 
+function getMode() {
+  const checked = document.querySelector('input[name="analysis-mode"]:checked');
+  return checked ? checked.value : "qc";
+}
+
 function setFiles(files) {
   state.files = files;
   dom.fileList.innerHTML = "";
+
   if (!files.length) {
-    dom.fileList.textContent = "";
-    updateStatus("Waiting for BioSample files.");
+    dom.dropzone.classList.remove("has-file");
+    dom.processButton.disabled = true;
+    if (dom.analyzeHint) dom.analyzeHint.textContent = "Selecciona archivos CSV para continuar";
+    updateStatus("Esperando archivos BioSample.");
     return;
   }
 
+  dom.dropzone.classList.add("has-file");
+  if (dom.dzFilename) {
+    dom.dzFilename.textContent = files.length === 1
+      ? files[0].name
+      : `${files.length} archivos seleccionados`;
+  }
   files.forEach((file) => {
     const chip = document.createElement("span");
     chip.className = "file-chip";
     chip.textContent = `${file.name} (${formatNumber(file.size / 1024, 1)} KB)`;
     dom.fileList.appendChild(chip);
   });
-  updateStatus(`${files.length} file(s) ready for processing.`);
+  dom.processButton.disabled = false;
+  if (dom.analyzeHint) dom.analyzeHint.textContent = `${files.length} archivo(s) listo(s) · haz clic en Procesar`;
+  updateStatus(`${files.length} archivo(s) listos para procesar.`);
 }
 
 function loadDemoGuide() {
-  dom.manifestPreview.innerHTML = `
-    <strong>Expected YSI export pattern</strong><br>
-    Use one or more files named <code>BioSample*.csv</code>.<br>
-    Required fields: <code>PlateSequenceName</code>, <code>BatchName</code>, <code>WellId</code>, <code>ChemistryId</code>, <code>Concentration</code>.
-  `;
+  const isHidden = dom.manifestPreview.classList.contains("hidden");
+  if (isHidden) {
+    dom.manifestPreview.innerHTML = `
+      <strong>Patrón de exportación YSI 2950</strong><br>
+      Usa uno o más archivos <code>BioSample*.csv</code> exportados directamente del analizador.
+      <div style="margin-top:0.75rem;">
+        <p class="settings-label" style="margin-bottom:0.4rem;">Columnas requeridas</p>
+        <div class="pill-grid">
+          <span class="pill">PlateSequenceName</span>
+          <span class="pill">BatchName</span>
+          <span class="pill">WellId</span>
+          <span class="pill">ChemistryId</span>
+          <span class="pill">Concentration</span>
+        </div>
+        <p class="settings-note" style="margin-top:0.5rem;">
+          Opcionales: <code>CompletionState</code>, <code>Units</code>, <code>LocalCompletionTime</code>, <code>Errors</code>
+        </p>
+      </div>
+    `;
+    dom.manifestPreview.classList.remove("hidden");
+    dom.loadDemoButton.textContent = "Ocultar plantilla ▴";
+  } else {
+    dom.manifestPreview.classList.add("hidden");
+    dom.loadDemoButton.textContent = "Ver plantilla ▾";
+  }
 }
 
 async function processFiles() {
   if (!state.files.length) {
-    updateStatus("Choose at least one BioSample CSV file first.");
+    updateStatus("Selecciona al menos un archivo CSV antes de procesar.");
     return;
   }
 
-  updateStatus("Reading files and computing replicate QC...");
+  showLoading();
+  updateStatus("Leyendo archivos y calculando QC de réplicas…");
+
   try {
-    const config = getConfig();
     const rawRows = [];
     for (const file of state.files) {
       const text = await file.text();
@@ -141,22 +199,34 @@ async function processFiles() {
     }
 
     if (!rawRows.length) {
-      throw new Error("The selected files do not contain any data rows.");
+      throw new Error("Los archivos seleccionados no contienen filas de datos.");
     }
 
     const columns = resolveColumns(rawRows);
     const measurements = prepareMeasurements(rawRows, columns);
-    const annotated = annotateReplicates(measurements, config);
-    const summary = buildSummary(annotated, config);
-    const outliers = buildOutlierTable(annotated);
     const manifest = buildManifest(rawRows);
 
-    state.outputs = { measurements: annotated, summary, outliers, manifest, config };
-    renderOutputs();
-    updateStatus(`Processed ${annotated.length} measurements across ${summary.length} replicate groups.`);
+    if (getMode() === "simple") {
+      const summary = buildSimpleSummary(measurements);
+      state.outputs = { measurements, summary, outliers: [], manifest, config: null, mode: "simple" };
+      renderSimpleOutputs(summary, measurements);
+      updateStatus(`${measurements.length} mediciones agrupadas en ${summary.length} grupos.`);
+    } else {
+      const config = getConfig();
+      const annotated = annotateReplicates(measurements, config);
+      const summary = buildSummary(annotated, config);
+      const outliers = buildOutlierTable(annotated);
+      state.outputs = { measurements: annotated, summary, outliers, manifest, config, mode: "qc" };
+      renderOutputs();
+      updateStatus(`Procesadas ${annotated.length} mediciones en ${summary.length} grupos de réplicas.`);
+    }
+
+    showResults();
   } catch (error) {
     console.error(error);
-    updateStatus(error.message || "Processing failed.");
+    updateStatus(error.message || "Error al procesar.");
+  } finally {
+    hideLoading();
   }
 }
 
@@ -171,6 +241,30 @@ function getConfig() {
 
 function updateStatus(message) {
   dom.statusBox.textContent = message;
+}
+
+function showResults() {
+  dom.uploadSection.classList.add("hidden");
+  dom.resultsSection.classList.remove("hidden");
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+function showUpload() {
+  dom.resultsSection.classList.add("hidden");
+  dom.uploadSection.classList.remove("hidden");
+  // Reset panels that simple mode may have hidden
+  [dom.chartPanel, dom.flagsPanel].forEach((p) => p.classList.remove("hidden"));
+  dom.measurementsDetails.classList.add("hidden");
+  if (dom.downloadOutliersBtn) dom.downloadOutliersBtn.classList.remove("hidden");
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+function showLoading() {
+  if (dom.loadingOverlay) dom.loadingOverlay.classList.remove("hidden");
+}
+
+function hideLoading() {
+  if (dom.loadingOverlay) dom.loadingOverlay.classList.add("hidden");
 }
 
 function resolveColumns(rows) {
@@ -451,7 +545,6 @@ function renderOutputs() {
     dom.kpiGrid.appendChild(card);
   });
 
-  renderManifestPreview(manifest);
   renderQuickResults(summary, config);
   renderCvChart(summary, config);
   renderTable(dom.outliersTable, outliers, { limit: 150 });
@@ -471,6 +564,110 @@ function renderManifestPreview(manifest) {
     Batch: <strong>${escapeHtml(first.BatchName || "n/a")}</strong><br>
     Plate: <strong>${escapeHtml(first.PlateSequenceName || "n/a")}</strong>
   `;
+}
+
+// ─── Simple mode ────────────────────────────────────────────────────────────
+
+function buildSimpleSummary(measurements) {
+  const groups = groupBy(measurements, (row) => groupKey(row));
+  return Array.from(groups.values())
+    .sort(sortGroups)
+    .map((group) => {
+      const first = group[0];
+      const values = group.map((r) => r.Concentration);
+      const m = mean(values);
+      const s = values.length > 1 ? sampleStd(values) : Number.NaN;
+      return {
+        BatchName: first.BatchName,
+        WellId: first.WellId,
+        ChemistryId: first.ChemistryId,
+        PlateSequenceNames: joinUnique(group.map((r) => r.PlateSequenceName).filter(Boolean)),
+        N: group.length,
+        Mean: roundOrBlank(m, 4),
+        SD: roundOrBlank(s, 4),
+        Unit: first.Unit || "",
+      };
+    });
+}
+
+function renderSimpleOutputs(summary, measurements) {
+  const uniqueWells = new Set(summary.map((r) => `${r.BatchName}|${r.WellId}`)).size;
+  const uniqueChems = new Set(summary.map((r) => r.ChemistryId)).size;
+
+  const kpis = [
+    ["Pozos únicos", uniqueWells],
+    ["Analitos", uniqueChems],
+    ["Grupos", summary.length],
+    ["Mediciones", measurements.length],
+  ];
+  dom.kpiGrid.innerHTML = "";
+  kpis.forEach(([label, value]) => {
+    const card = document.createElement("div");
+    card.className = "kpi-card";
+    card.innerHTML = `<span class="kpi-label">${label}</span><span class="kpi-value">${value}</span>`;
+    dom.kpiGrid.appendChild(card);
+  });
+
+  renderSimplePivot(summary);
+
+  // Hide QC-only panels
+  dom.chartPanel.classList.add("hidden");
+  dom.flagsPanel.classList.add("hidden");
+  if (dom.downloadOutliersBtn) dom.downloadOutliersBtn.classList.add("hidden");
+  // measurements-details stays hidden (no annotation in simple mode)
+}
+
+function renderSimplePivot(summary) {
+  const sortedChems = [...new Set(summary.map((r) => r.ChemistryId))].sort((a, b) => {
+    const ia = CHEMISTRY_ORDER.indexOf(a);
+    const ib = CHEMISTRY_ORDER.indexOf(b);
+    if (ia >= 0 && ib >= 0) return ia - ib;
+    if (ia >= 0) return -1;
+    if (ib >= 0) return 1;
+    return a.localeCompare(b);
+  });
+
+  const wellMap = new Map();
+  summary.forEach((row) => {
+    const key = `${row.BatchName}|${row.WellId}`;
+    if (!wellMap.has(key)) wellMap.set(key, { meta: row, data: {} });
+    wellMap.get(key).data[row.ChemistryId] = row;
+  });
+
+  const thead = `<thead>
+    <tr>
+      <th rowspan="2">Well</th>
+      <th rowspan="2">Batch</th>
+      <th rowspan="2">Placas</th>
+      ${sortedChems.map((c) => `<th colspan="3" class="chem-group-header">${escapeHtml(c)}</th>`).join("")}
+    </tr>
+    <tr>
+      ${sortedChems.map(() => `
+        <th class="chem-sub-header">N</th>
+        <th class="chem-sub-header">Media</th>
+        <th class="chem-sub-header">SD</th>
+      `).join("")}
+    </tr>
+  </thead>`;
+
+  const tbodyRows = [...wellMap.entries()].map(([, { meta, data }]) => {
+    const chemCells = sortedChems.map((chem) => {
+      const row = data[chem];
+      if (!row) return `<td class="no-data chem-col-first">—</td><td class="no-data">—</td><td class="no-data">—</td>`;
+      const unit = row.Unit ? ` ${row.Unit}` : "";
+      return `<td class="chem-col-first" style="text-align:center">${row.N}</td>
+              <td style="text-align:center">${row.Mean}${escapeHtml(unit)}</td>
+              <td style="text-align:center">${row.SD !== "" ? row.SD : "—"}</td>`;
+    }).join("");
+    return `<tr>
+      <td class="well-id-cell">${escapeHtml(meta.WellId)}</td>
+      <td>${escapeHtml(meta.BatchName)}</td>
+      <td class="plates-cell">${escapeHtml(meta.PlateSequenceNames || "")}</td>
+      ${chemCells}
+    </tr>`;
+  }).join("");
+
+  dom.quickResultsTable.innerHTML = `${thead}<tbody>${tbodyRows}</tbody>`;
 }
 
 function renderCvChart(summary, config) {
@@ -873,8 +1070,54 @@ function renderQuickResults(summary, config) {
   dom.quickResultsTable.innerHTML = `${thead}<tbody>${tbodyRows}</tbody>`;
 }
 
+function copySimpleTable() {
+  const { summary } = state.outputs;
+  const sortedChems = [...new Set(summary.map((r) => r.ChemistryId))].sort((a, b) => {
+    const ia = CHEMISTRY_ORDER.indexOf(a);
+    const ib = CHEMISTRY_ORDER.indexOf(b);
+    if (ia >= 0 && ib >= 0) return ia - ib;
+    if (ia >= 0) return -1;
+    if (ib >= 0) return 1;
+    return a.localeCompare(b);
+  });
+
+  const wellMap = new Map();
+  summary.forEach((row) => {
+    const key = `${row.BatchName}|${row.WellId}`;
+    if (!wellMap.has(key)) wellMap.set(key, { meta: row, data: {} });
+    wellMap.get(key).data[row.ChemistryId] = row;
+  });
+
+  const headerCols = ["Well", "Batch", "Plates"];
+  sortedChems.forEach((c) => { headerCols.push(`${c} N`, `${c} Media`, `${c} SD`); });
+
+  const rows = [...wellMap.entries()].map(([, { meta, data }]) => {
+    const cols = [meta.WellId, meta.BatchName, meta.PlateSequenceNames || ""];
+    sortedChems.forEach((chem) => {
+      const row = data[chem];
+      cols.push(row ? row.N : "", row ? row.Mean : "", row ? row.SD : "");
+    });
+    return cols.join("\t");
+  });
+
+  const text = [headerCols.join("\t"), ...rows].join("\n");
+  const btn = dom.copyResultsBtn;
+  const orig = btn.textContent;
+  navigator.clipboard.writeText(text).then(() => {
+    btn.textContent = "Copiado!";
+    setTimeout(() => { btn.textContent = orig; }, 2000);
+  }).catch(() => {
+    btn.textContent = "Error al copiar";
+    setTimeout(() => { btn.textContent = orig; }, 2000);
+  });
+}
+
 function copyResultsTable() {
   if (!state.outputs) return;
+  if (state.outputs.mode === "simple") {
+    copySimpleTable();
+    return;
+  }
   const { summary, config } = state.outputs;
   const { sortedChemistries, chemUnit, wellMap, sortedKeys } = buildWellPivot(summary);
 
@@ -920,5 +1163,25 @@ function copyResultsTable() {
     setTimeout(() => { btn.textContent = orig; }, 2000);
   });
 }
+
+// Custom accordion toggle
+document.querySelectorAll('.acc-section .acc-header').forEach(header => {
+  header.addEventListener('click', () => {
+    const section = header.closest('.acc-section');
+    const isOpen = section.classList.toggle('open');
+    header.setAttribute('aria-expanded', String(isOpen));
+  });
+});
+
+// Guide-section (measurements) toggle
+document.querySelectorAll('.guide-banner').forEach(banner => {
+  banner.addEventListener('click', () => {
+    const section = banner.closest('.guide-section');
+    const panel = section.querySelector('.guide-panel');
+    const isExpanded = banner.getAttribute('aria-expanded') === 'true';
+    banner.setAttribute('aria-expanded', String(!isExpanded));
+    panel.classList.toggle('open', !isExpanded);
+  });
+});
 
 initializeApp();

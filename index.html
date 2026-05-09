@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="es">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -31,115 +31,195 @@
     </div>
   </header>
 
-  <div class="page-shell">
-    <main class="main-grid">
+  <!-- ── Loading overlay ── -->
+  <div class="loading-overlay hidden" id="loading-overlay" role="status" aria-live="assertive">
+    <div class="loading-card">
+      <div class="loading-spinner" aria-hidden="true"></div>
+      <span class="loading-text">Procesando archivos…</span>
+      <span class="loading-sub">Calculando réplicas y valores atípicos</span>
+    </div>
+  </div>
 
-      <!-- ── Intake + settings ── -->
-      <section class="panel intake-panel" aria-label="File upload and settings">
+  <div class="md-main">
 
-        <!-- Settings bar: horizontal, above the dropzone -->
-        <div class="settings-bar">
-          <span class="settings-label">QC Thresholds</span>
-          <div class="settings-bar-fields">
-            <label class="setting-field">
-              <span>CV (%)</span>
-              <input id="cv-threshold" type="number" min="0" step="0.1" value="5.0">
-            </label>
-            <label class="setting-field">
-              <span>Modified z</span>
-              <input id="modz-threshold" type="number" min="0" step="0.1" value="3.5">
-            </label>
-            <label class="setting-field">
-              <span>IQR multiplier</span>
-              <input id="iqr-multiplier" type="number" min="0" step="0.1" value="1.5">
-            </label>
-            <label class="setting-field">
-              <span>Consensus signals</span>
-              <input id="consensus-flags" type="number" min="1" step="1" value="1">
-            </label>
+    <!-- ══════════════════════════════════════
+         UPLOAD SECTION
+         ══════════════════════════════════════ -->
+    <div id="upload-section" class="md-card">
+      <h2 class="md-card-title">Cargar archivos BioSample</h2>
+      <p class="md-card-subtitle">Exportaciones CSV del analizador YSI 2950 BioSample</p>
+
+      <!-- ── Modo de análisis ── -->
+      <div class="mode-selector" role="group" aria-label="Modo de análisis">
+
+        <label class="mode-card selected" for="mode-qc">
+          <input type="radio" id="mode-qc" name="analysis-mode" value="qc" checked>
+          <div class="mode-card-icon">
+            <svg width="22" height="22" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+              <path d="M10 3.75a2 2 0 1 0-4 0 2 2 0 0 0 4 0ZM17.25 4.5a.75.75 0 0 0 0-1.5h-5.5a.75.75 0 0 0 0 1.5h5.5ZM5 3.75a.75.75 0 0 1-.75.75h-1.5a.75.75 0 0 1 0-1.5h1.5a.75.75 0 0 1 .75.75ZM4.25 17a.75.75 0 0 0 .75-.75 2 2 0 1 1 4 0 .75.75 0 0 0 1.5 0 3.5 3.5 0 1 0-7 0c0 .414.336.75.75.75ZM17.25 16.25a.75.75 0 0 0 0-1.5h-5.5a.75.75 0 0 0 0 1.5h5.5ZM3 16.25a.75.75 0 0 1-.75.75H.75a.75.75 0 0 1 0-1.5h1.5a.75.75 0 0 1 .75.75ZM8.25 10.5a.75.75 0 0 0 0-1.5h-5.5a.75.75 0 0 0 0 1.5h5.5ZM17 10a2 2 0 1 0-4 0 2 2 0 0 0 4 0Zm-1.75.75a.75.75 0 0 0 .75-.75V9.5a.75.75 0 0 0-1.5 0v.25a.75.75 0 0 0 .75.75Z"/>
+            </svg>
           </div>
-          <div class="settings-bar-actions">
-            <button id="process-button" class="btn-primary">
-              <svg viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M10 18a8 8 0 1 0 0-16 8 8 0 0 0 0 16ZM9.555 7.168A1 1 0 0 0 8 8v4a1 1 0 0 0 1.555.832l3-2a1 1 0 0 0 0-1.664l-3-2Z" clip-rule="evenodd"/></svg>
-              Process Files
-            </button>
-            <button id="load-demo-button" class="btn-ghost">Format guide</button>
-          </div>
-        </div>
-
-        <!-- Dropzone + info columns -->
-        <div class="intake-body">
-          <div class="intake-drop-side">
-            <label class="dropzone" id="dropzone">
-              <input id="file-input" type="file" accept=".csv,text/csv" multiple aria-label="Choose CSV files">
-              <svg class="drop-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                <path d="M12 16V4m0 0L8 8m4-4 4 4"/><rect x="3" y="16" width="18" height="5" rx="2"/>
-              </svg>
-              <span class="drop-title">Drop BioSample CSV files here</span>
-              <span class="drop-subtitle">or click to choose one or more files</span>
-            </label>
-            <div class="file-list" id="file-list"></div>
-            <div class="status-bar" id="status-box">Waiting for BioSample files.</div>
-          </div>
-
-          <div class="intake-info-side">
-            <div>
-              <p class="settings-label">Required CSV columns</p>
-              <div class="pill-grid" style="margin-top:0.4rem;">
-                <span class="pill">PlateSequenceName</span>
-                <span class="pill">BatchName</span>
-                <span class="pill">WellId</span>
-                <span class="pill">ChemistryId</span>
-                <span class="pill">Concentration</span>
-              </div>
-              <p class="settings-note" style="margin-top:0.5rem;">
-                Optional: <code>CompletionState</code>, <code>Units</code>, <code>LocalCompletionTime</code>, <code>Errors</code>
-              </p>
+          <div class="mode-card-info">
+            <div class="mode-card-title">
+              Control de calidad
+              <span class="mode-card-badge">Por defecto</span>
             </div>
-
-            <details class="method-accordion">
-              <summary>How are outliers detected?</summary>
-              <div class="method-body">
-                <p>Three independent statistical tests run on each replicate group (≥ 3 replicates required). A replicate is recommended for discard when it accumulates enough flags (configurable via <em>Consensus signals</em>).</p>
-                <dl>
-                  <dt>Modified Z-Score</dt>
-                  <dd>Uses the median and MAD — robust to non-normal distributions. Flags a replicate if |0.6745 × (value − median) / MAD| exceeds the threshold.</dd>
-                  <dt>IQR Fence</dt>
-                  <dd>Flags values outside Q1 − multiplier × IQR or Q3 + multiplier × IQR.</dd>
-                  <dt>Leave-One-Out CV</dt>
-                  <dd>Tests whether removing each replicate reduces group CV below threshold. Only the best-improvement replicate is a candidate.</dd>
-                </dl>
-                <p>The <strong>cleaned mean/SD</strong> is computed after the recommended discard. Groups are <strong>REVIEW</strong> when no single outlier is found but CV still exceeds threshold.</p>
-              </div>
-            </details>
-
-            <div class="manifest-preview" id="manifest-preview"></div>
+            <div class="mode-card-subtitle">Detección de atípicos · CV · media limpia</div>
+            <div class="mode-card-desc">
+              Detecta valores atípicos con tres pruebas estadísticas independientes (Modified Z, IQR, LOO-CV) y calcula la media y SD limpias tras el descarte recomendado.
+            </div>
           </div>
+        </label>
+
+        <label class="mode-card" for="mode-simple">
+          <input type="radio" id="mode-simple" name="analysis-mode" value="simple">
+          <div class="mode-card-icon">
+            <svg width="22" height="22" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+              <path fill-rule="evenodd" d="M.99 5.24A2.25 2.25 0 0 1 3.25 3h13.5A2.25 2.25 0 0 1 19 5.25l.01 9.5A2.25 2.25 0 0 1 16.76 17H3.26A2.267 2.267 0 0 1 1 14.75l-.01-9.51Zm8.26 9.5h4.5v-4.5h-4.5v4.5Zm.75-6h3v-3.5h-3v3.5Zm-1.5 0v-3.5h-5v3.5h5Zm-5 1.5v4.5h5v-4.5h-5Zm6.75 4.5h4.5v-4.5h-4.5v4.5Zm4.5-6h-4.5v-3.5h3.5c.276 0 .5.224.5.5v3Zm-6-3.5h-5v-1.5c0-.276.224-.5.5-.5H8.5v2Z" clip-rule="evenodd"/>
+            </svg>
+          </div>
+          <div class="mode-card-info">
+            <div class="mode-card-title">Agrupación simple</div>
+            <div class="mode-card-subtitle">Solo media y SD por analito</div>
+            <div class="mode-card-desc">
+              Agrupa las réplicas por pozo y analito y calcula la media aritmética y desviación estándar. Sin corrección de atípicos ni evaluación de CV.
+            </div>
+          </div>
+        </label>
+
+      </div>
+
+      <!-- Dropzone — two visual states -->
+      <label class="dropzone" id="dropzone">
+        <input id="file-input" type="file" accept=".csv,text/csv" multiple aria-label="Seleccionar archivos CSV">
+
+        <!-- Default: no file selected -->
+        <div class="dz-state-default" id="dz-state-default">
+          <svg class="drop-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"
+               stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M12 16V4m0 0L8 8m4-4 4 4"/>
+            <rect x="3" y="16" width="18" height="5" rx="2"/>
+          </svg>
+          <span class="drop-title">Arrastra archivos CSV aquí</span>
+          <span class="drop-subtitle">o haz clic para seleccionar uno o más archivos BioSample</span>
         </div>
 
-      </section>
+        <!-- Ready: file(s) selected -->
+        <div class="dz-state-ready" id="dz-state-ready">
+          <svg class="drop-icon dz-check-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+               stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M20 6L9 17l-5-5"/>
+          </svg>
+          <span class="dz-filename" id="dz-filename"></span>
+          <span class="drop-subtitle">Haz clic para cambiar la selección</span>
+        </div>
+      </label>
 
-      <!-- ── KPI strip ── -->
-      <section class="panel kpi-panel hidden" id="kpi-panel" aria-label="Run summary">
+      <!-- File chips -->
+      <div class="file-list" id="file-list"></div>
+
+      <!-- Status bar -->
+      <div class="status-bar" id="status-box">Esperando archivos BioSample.</div>
+
+      <!-- Format guide toggle -->
+      <p class="csv-hint-link">
+        ¿No sabes el formato?
+        <button id="load-demo-button" type="button" class="hint-toggle-btn">Ver plantilla ▾</button>
+      </p>
+      <div class="manifest-preview hidden" id="manifest-preview"></div>
+
+      <!-- ── Settings group: QC thresholds (hidden in simple mode) ── -->
+      <div class="settings-group" id="qc-settings-group">
+        <div class="settings-group-title">
+          <svg width="14" height="14" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+            <path d="M10 3.75a2 2 0 1 0-4 0 2 2 0 0 0 4 0ZM17.25 4.5a.75.75 0 0 0 0-1.5h-5.5a.75.75 0 0 0 0 1.5h5.5ZM5 3.75a.75.75 0 0 1-.75.75h-1.5a.75.75 0 0 1 0-1.5h1.5a.75.75 0 0 1 .75.75ZM4.25 17a.75.75 0 0 0 .75-.75 2 2 0 1 1 4 0 .75.75 0 0 0 1.5 0 3.5 3.5 0 1 0-7 0c0 .414.336.75.75.75ZM17.25 16.25a.75.75 0 0 0 0-1.5h-5.5a.75.75 0 0 0 0 1.5h5.5ZM3 16.25a.75.75 0 0 1-.75.75H.75a.75.75 0 0 1 0-1.5h1.5a.75.75 0 0 1 .75.75ZM8.25 10.5a.75.75 0 0 0 0-1.5h-5.5a.75.75 0 0 0 0 1.5h5.5ZM17 10a2 2 0 1 0-4 0 2 2 0 0 0 4 0Zm-1.75.75a.75.75 0 0 0 .75-.75V9.5a.75.75 0 0 0-1.5 0v.25a.75.75 0 0 0 .75.75Z"/>
+          </svg>
+          Umbrales QC
+        </div>
+        <div class="control-list-h">
+          <label class="control">
+            <span>CV (%)</span>
+            <input id="cv-threshold" class="number-control" type="number" min="0" step="0.1" value="5.0">
+          </label>
+          <label class="control">
+            <span>Modified z-score</span>
+            <input id="modz-threshold" class="number-control" type="number" min="0" step="0.1" value="3.5">
+          </label>
+          <label class="control">
+            <span>IQR multiplier</span>
+            <input id="iqr-multiplier" class="number-control" type="number" min="0" step="0.1" value="1.5">
+          </label>
+          <label class="control">
+            <span>Consensus signals</span>
+            <input id="consensus-flags" class="number-control" type="number" min="1" step="1" value="1">
+          </label>
+        </div>
+      </div>
+
+      <!-- ── Settings group: outlier method ── -->
+      <div class="settings-group" id="method-settings-group">
+        <div class="settings-group-title">
+          <svg width="14" height="14" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+            <path fill-rule="evenodd" d="M18 10a8 8 0 1 1-16 0 8 8 0 0 1 16 0Zm-7-4a1 1 0 1 1-2 0 1 1 0 0 1 2 0ZM9 9a.75.75 0 0 0 0 1.5h.253a.25.25 0 0 1 .244.304l-.459 2.066A1.75 1.75 0 0 0 10.747 15H11a.75.75 0 0 0 0-1.5h-.253a.25.25 0 0 1-.244-.304l.459-2.066A1.75 1.75 0 0 0 9.253 9H9Z" clip-rule="evenodd"/>
+          </svg>
+          Detección de atípicos
+        </div>
+        <div class="method-body">
+          <p>Se ejecutan tres pruebas estadísticas independientes en cada grupo de réplicas (≥ 3 replicados requeridos). Una réplica se recomienda para descarte cuando acumula suficientes señales (configurable con <em>Consensus signals</em>).</p>
+          <dl>
+            <dt>Modified Z-Score</dt>
+            <dd>Usa la mediana y el MAD — robusto ante distribuciones no normales. Marca una réplica si |0.6745 × (valor − mediana) / MAD| supera el umbral.</dd>
+            <dt>IQR Fence</dt>
+            <dd>Marca valores fuera de Q1 − multiplicador × IQR o Q3 + multiplicador × IQR.</dd>
+            <dt>Leave-One-Out CV</dt>
+            <dd>Verifica si eliminar una réplica reduce el CV del grupo por debajo del umbral. Solo el candidato con mayor mejora es marcado.</dd>
+          </dl>
+          <p>La <strong>media/SD limpia</strong> se calcula tras el descarte recomendado. Los grupos quedan en <strong>REVIEW</strong> cuando no se identifica un atípico único pero el CV supera el umbral.</p>
+        </div>
+      </div>
+
+      <!-- ── Analyze button ── -->
+      <div class="analyze-row">
+        <button id="process-button" class="btn-analyze" disabled>
+          <svg viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+            <path fill-rule="evenodd" d="M10 18a8 8 0 1 0 0-16 8 8 0 0 0 0 16ZM9.555 7.168A1 1 0 0 0 8 8v4a1 1 0 0 0 1.555.832l3-2a1 1 0 0 0 0-1.664l-3-2Z" clip-rule="evenodd"/>
+          </svg>
+          Procesar archivos
+        </button>
+        <p class="analyze-hint" id="analyze-hint">Selecciona archivos CSV para continuar</p>
+      </div>
+    </div>
+
+    <!-- ══════════════════════════════════════
+         RESULTS SECTION
+         ══════════════════════════════════════ -->
+    <div id="results-section" class="hidden">
+
+      <!-- KPI strip -->
+      <div class="md-card kpi-wrap" id="kpi-panel">
         <div class="kpi-grid" id="kpi-grid"></div>
-      </section>
+      </div>
 
-      <!-- ── Results table ── -->
-      <section class="panel results-panel hidden" id="quick-results-panel" aria-label="Cleaned results">
+      <!-- Results table -->
+      <div class="md-card" id="quick-results-panel">
         <div class="panel-head">
           <div class="panel-head-left">
-            <h2>Results</h2>
-            <p>Cleaned mean ± SD per well. Flagged wells appear first.</p>
+            <span class="panel-kicker">QC Summary</span>
+            <h2>Resultados</h2>
+            <p>Media ± SD limpia por pozo. Los pozos marcados aparecen primero.</p>
           </div>
           <div class="panel-head-actions">
             <button id="copy-results-btn" class="btn-secondary">
-              <svg viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path d="M7 3.5A1.5 1.5 0 0 1 8.5 2h3.879a1.5 1.5 0 0 1 1.06.44l3.122 3.12A1.5 1.5 0 0 1 17 6.622V12.5a1.5 1.5 0 0 1-1.5 1.5h-1v-3.379a3 3 0 0 0-.879-2.121L10.5 5.379A3 3 0 0 0 8.379 4.5H7v-1Z"/><path d="M4.5 6A1.5 1.5 0 0 0 3 7.5v9A1.5 1.5 0 0 0 4.5 18h7a1.5 1.5 0 0 0 1.5-1.5v-5.879a1.5 1.5 0 0 0-.44-1.06L9.44 6.439A1.5 1.5 0 0 0 8.378 6H4.5Z"/></svg>
-              Copy for Excel
+              <svg viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                <path d="M7 3.5A1.5 1.5 0 0 1 8.5 2h3.879a1.5 1.5 0 0 1 1.06.44l3.122 3.12A1.5 1.5 0 0 1 17 6.622V12.5a1.5 1.5 0 0 1-1.5 1.5h-1v-3.379a3 3 0 0 0-.879-2.121L10.5 5.379A3 3 0 0 0 8.379 4.5H7v-1Z"/>
+                <path d="M4.5 6A1.5 1.5 0 0 0 3 7.5v9A1.5 1.5 0 0 0 4.5 18h7a1.5 1.5 0 0 0 1.5-1.5v-5.879a1.5 1.5 0 0 0-.44-1.06L9.44 6.439A1.5 1.5 0 0 0 8.378 6H4.5Z"/>
+              </svg>
+              Copiar para Excel
             </button>
           </div>
         </div>
         <div class="downloads-strip">
-          <span class="downloads-label">Download</span>
+          <span class="downloads-label">Descargar</span>
           <button id="download-summary" class="dl-btn">
             <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 .5a.5.5 0 0 1 .5.5v7.793l2.146-2.147a.5.5 0 0 1 .708.708l-3 3a.5.5 0 0 1-.708 0l-3-3a.5.5 0 1 1 .708-.708L7.5 8.793V1a.5.5 0 0 1 .5-.5Zm-5 11a.5.5 0 0 0 0 1h10a.5.5 0 0 0 0-1H3Z"/></svg>
             Summary
@@ -160,14 +240,15 @@
         <div class="table-wrap">
           <table id="quick-results-table"></table>
         </div>
-      </section>
+      </div>
 
-      <!-- ── CV chart ── -->
-      <section class="panel chart-panel hidden" id="chart-panel" aria-label="Variability snapshot">
+      <!-- CV chart -->
+      <div class="md-card" id="chart-panel">
         <div class="panel-head">
           <div class="panel-head-left">
+            <span class="panel-kicker">CV Analysis</span>
             <h2>Variability Snapshot</h2>
-            <p>Top wells by raw CV with cleaned CV after recommended discard.</p>
+            <p>Pozos con mayor CV bruto y CV limpio tras el descarte recomendado.</p>
           </div>
           <div class="chart-legend">
             <span class="legend-raw">Raw CV</span>
@@ -176,38 +257,56 @@
           </div>
         </div>
         <div id="cv-chart" class="chart-wrap"></div>
-      </section>
+      </div>
 
-      <!-- ── Flagged replicates ── -->
-      <section class="panel flags-panel hidden" id="flags-panel" aria-label="Flagged replicates">
+      <!-- Flagged replicates -->
+      <div class="md-card" id="flags-panel">
         <div class="panel-head">
           <div class="panel-head-left">
-            <h2>Flagged Replicates</h2>
-            <p>Individual replicates that triggered review or are recommended for discard.</p>
+            <span class="panel-kicker">Outlier Detection</span>
+            <h2>Replicados Marcados</h2>
+            <p>Réplicas individuales que activaron revisión o se recomiendan para descarte.</p>
           </div>
         </div>
         <div class="table-wrap">
           <table id="outliers-table"></table>
         </div>
-      </section>
+      </div>
 
-      <!-- ── Annotated measurements (collapsed tab) ── -->
-      <details class="measurements-details hidden" id="measurements-details">
-        <summary class="measurements-summary">
-          <svg viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M6 4.75A.75.75 0 0 1 6.75 4h10.5a.75.75 0 0 1 0 1.5H6.75A.75.75 0 0 1 6 4.75ZM6 10a.75.75 0 0 1 .75-.75h10.5a.75.75 0 0 1 0 1.5H6.75A.75.75 0 0 1 6 10Zm0 5.25a.75.75 0 0 1 .75-.75h10.5a.75.75 0 0 1 0 1.5H6.75a.75.75 0 0 1-.75-.75ZM1.99 4.75a1 1 0 0 1 1-1H3a1 1 0 0 1 0 2h-.01a1 1 0 0 1-1-1ZM1.99 10a1 1 0 0 1 1-1H3a1 1 0 0 1 0 2h-.01a1 1 0 0 1-1-1ZM1.99 15.25a1 1 0 0 1 1-1H3a1 1 0 0 1 0 2h-.01a1 1 0 0 1-1-1Z" clip-rule="evenodd"/></svg>
-          <span>Annotated Measurements</span>
-          <span class="measurements-desc">Replicate-level QC detail for downstream audit</span>
-          <span class="measurements-chevron">▸</span>
-        </summary>
-        <div class="measurements-body">
-          <div class="table-wrap">
-            <table id="measurements-table"></table>
+      <!-- Annotated measurements (collapsible) -->
+      <div class="guide-section hidden" id="measurements-details">
+        <button class="guide-banner" type="button" aria-expanded="false" aria-controls="measurements-panel">
+          <div class="guide-banner-main">
+            <span class="guide-kicker">Réplica · Auditoría</span>
+            <div class="guide-title">Mediciones Anotadas</div>
+            <p class="guide-copy">Detalle QC por réplica para seguimiento y auditoría</p>
+          </div>
+          <div class="guide-banner-action" aria-hidden="true">
+            <svg class="guide-chevron" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+          </div>
+        </button>
+        <div class="guide-panel" id="measurements-panel">
+          <div class="guide-panel-inner">
+            <div class="table-wrap">
+              <table id="measurements-table"></table>
+            </div>
           </div>
         </div>
-      </details>
+      </div>
 
-    </main>
-  </div>
+      <!-- Action bar -->
+      <div class="md-action-bar">
+        <button id="new-analysis-btn" class="btn-outlined">
+          <svg viewBox="0 0 20 20" fill="currentColor" width="15" height="15" aria-hidden="true">
+            <path fill-rule="evenodd" d="M7.793 2.232a.75.75 0 0 1-.025 1.06L3.622 7.25h10.003a5.375 5.375 0 0 1 0 10.75H10.75a.75.75 0 0 1 0-1.5h2.875a3.875 3.875 0 0 0 0-7.75H3.622l4.146 3.957a.75.75 0 0 1-1.036 1.085l-5.5-5.25a.75.75 0 0 1 0-1.085l5.5-5.25a.75.75 0 0 1 1.06.025Z" clip-rule="evenodd"/>
+          </svg>
+          Analizar otra muestra
+        </button>
+      </div>
+
+    </div><!-- /results-section -->
+
+  </div><!-- /md-main -->
 
   <footer class="hc-footer">
     <div class="hc-footer-inner">
