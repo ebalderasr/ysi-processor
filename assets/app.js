@@ -74,6 +74,11 @@ const dom = {
   downloadMeasurements: document.getElementById("download-measurements"),
   downloadOutliers: document.getElementById("download-outliers"),
   downloadManifest: document.getElementById("download-manifest"),
+  downloadCorrected: document.getElementById("download-corrected"),
+  correctionEnabled: document.getElementById("correction-enabled"),
+  correctionWell: document.getElementById("correction-well"),
+  correctionDetail: document.getElementById("correction-detail"),
+  correctionSettingsGroup: document.getElementById("correction-settings-group"),
   quickResultsPanel: document.getElementById("quick-results-panel"),
   quickResultsTable: document.getElementById("quick-results-table"),
   copyResultsBtn: document.getElementById("copy-results-btn"),
@@ -92,6 +97,7 @@ function initializeApp() {
       });
       const isSimple = getMode() === "simple";
       if (dom.qcSettingsGroup) dom.qcSettingsGroup.classList.toggle("hidden", isSimple);
+      if (dom.correctionSettingsGroup) dom.correctionSettingsGroup.classList.toggle("hidden", isSimple);
       if (dom.methodSettingsGroup) dom.methodSettingsGroup.classList.toggle("settings-group--muted", isSimple);
     });
   });
@@ -99,7 +105,23 @@ function initializeApp() {
   dom.downloadMeasurements.addEventListener("click", () => downloadOutput("measurements", "ysi_measurements_annotated.csv"));
   dom.downloadOutliers.addEventListener("click", () => downloadOutput("outliers", "ysi_outliers.csv"));
   dom.downloadManifest.addEventListener("click", () => downloadOutput("manifest", "ysi_file_manifest.csv"));
+  dom.downloadCorrected.addEventListener("click", () => downloadOutput("corrected", "ysi_corrected.csv"));
   dom.copyResultsBtn.addEventListener("click", copyResultsTable);
+
+  dom.correctionEnabled.addEventListener("change", () => {
+    dom.correctionDetail.classList.toggle("hidden", !dom.correctionEnabled.checked);
+  });
+
+  document.querySelectorAll(".corr-type-select").forEach((select) => {
+    select.addEventListener("change", () => {
+      const row = select.closest(".corr-row");
+      const expectedInput = row.querySelector(".corr-expected");
+      const unitSpan = row.querySelector(".corr-unit");
+      const isMult = select.value === "multiplicative";
+      if (expectedInput) expectedInput.disabled = !isMult;
+      if (unitSpan) unitSpan.textContent = isMult ? (row.dataset.unit || "") : "";
+    });
+  });
 
   ["dragenter", "dragover"].forEach((eventName) => {
     dom.dropzone.addEventListener(eventName, (event) => {
@@ -217,8 +239,22 @@ async function processFiles() {
       const summary = buildSummary(annotated, config);
       const outliers = buildOutlierTable(annotated);
       state.outputs = { measurements: annotated, summary, outliers, manifest, config, mode: "qc" };
+
+      const corrConfig = getCorrectionConfig();
+      let corrStatusMsg = "";
+      if (corrConfig.enabled) {
+        const controlFound = summary.some((r) => r.WellId === corrConfig.controlWell);
+        if (controlFound) {
+          state.outputs.corrected = buildCorrectedRows(summary, corrConfig);
+          dom.downloadCorrected.classList.remove("hidden");
+          corrStatusMsg = ` · Corrección aplicada (control: ${corrConfig.controlWell}).`;
+        } else {
+          corrStatusMsg = ` · ⚠ Pozo "${corrConfig.controlWell}" no encontrado — verifica el ID.`;
+        }
+      }
+
       renderOutputs();
-      updateStatus(`Procesadas ${annotated.length} mediciones en ${summary.length} grupos de réplicas.`);
+      updateStatus(`Procesadas ${annotated.length} mediciones en ${summary.length} grupos de réplicas.${corrStatusMsg}`);
     }
 
     showResults();
@@ -239,6 +275,74 @@ function getConfig() {
   };
 }
 
+function getCorrectionConfig() {
+  if (!dom.correctionEnabled.checked) return { enabled: false };
+  const controlWell = (dom.correctionWell.value || "R24_A01").trim();
+  const analytes = {};
+  document.querySelectorAll(".corr-row").forEach((row) => {
+    const analyte = row.dataset.analyte;
+    const type = row.querySelector(".corr-type-select").value;
+    const expectedInput = row.querySelector(".corr-expected");
+    analytes[analyte] = { type, expected: expectedInput ? Number(expectedInput.value) : 0 };
+  });
+  return { enabled: true, controlWell, analytes };
+}
+
+function buildCorrectedRows(summary, corrConfig) {
+  const { controlWell, analytes } = corrConfig;
+
+  const controlValues = {};
+  summary.filter((r) => r.WellId === controlWell).forEach((r) => {
+    const v = Number(r.CleanMean);
+    if (Number.isFinite(v)) controlValues[r.ChemistryId] = v;
+  });
+
+  const { sortedChemistries, chemUnit, wellMap, sortedKeys } = buildWellPivot(summary);
+
+  const correctedChems = sortedChemistries.filter((c) => {
+    const cfg = analytes[c] || { type: "none" };
+    return cfg.type !== "none" && c in controlValues;
+  });
+
+  return sortedKeys.map((key) => {
+    const { meta, data } = wellMap.get(key);
+    const row = { Well: meta.WellId, Batch: meta.BatchName, Plates: meta.PlateSequenceNames || "" };
+
+    sortedChemistries.forEach((chem) => {
+      const r = data[chem];
+      const u = chemUnit[chem] ? ` (${chemUnit[chem]})` : "";
+      row[`${chem}${u} Mean`] = r && Number.isFinite(Number(r.CleanMean)) ? Number(r.CleanMean).toFixed(4) : "";
+      row[`${chem}${u} SD`] = r && Number.isFinite(Number(r.CleanStd)) ? Number(r.CleanStd).toFixed(4) : "";
+      row[`${chem} CV%`] = r && Number.isFinite(Number(r.CleanCVPercent)) ? Number(r.CleanCVPercent).toFixed(2) : "";
+      row[`${chem} Status`] = r ? statusLabel(r) : "";
+    });
+
+    correctedChems.forEach((chem) => {
+      const r = data[chem];
+      const cfg = analytes[chem] || { type: "none" };
+      const cv = controlValues[chem];
+      const u = chemUnit[chem] ? ` (${chemUnit[chem]})` : "";
+      if (!r || !Number.isFinite(Number(r.CleanMean))) {
+        row[`${chem}${u} Corr. Mean`] = "";
+        row[`${chem}${u} Corr. SD`] = "";
+        return;
+      }
+      const m = Number(r.CleanMean);
+      const s = Number(r.CleanStd);
+      if (cfg.type === "multiplicative" && cv > 0) {
+        const f = cfg.expected / cv;
+        row[`${chem}${u} Corr. Mean`] = (m * f).toFixed(4);
+        row[`${chem}${u} Corr. SD`] = Number.isFinite(s) ? (s * f).toFixed(4) : "";
+      } else if (cfg.type === "additive") {
+        row[`${chem}${u} Corr. Mean`] = (m - cv).toFixed(4);
+        row[`${chem}${u} Corr. SD`] = Number.isFinite(s) ? s.toFixed(4) : "";
+      }
+    });
+
+    return row;
+  });
+}
+
 function updateStatus(message) {
   dom.statusBox.textContent = message;
 }
@@ -256,6 +360,7 @@ function showUpload() {
   [dom.chartPanel, dom.flagsPanel].forEach((p) => p.classList.remove("hidden"));
   dom.measurementsDetails.classList.add("hidden");
   if (dom.downloadOutliersBtn) dom.downloadOutliersBtn.classList.remove("hidden");
+  dom.downloadCorrected.classList.add("hidden");
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
