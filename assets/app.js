@@ -95,10 +95,10 @@ function initializeApp() {
       document.querySelectorAll(".mode-card").forEach((card) => {
         card.classList.toggle("selected", card.querySelector("input").checked);
       });
-      const isSimple = getMode() === "simple";
-      if (dom.qcSettingsGroup) dom.qcSettingsGroup.classList.toggle("hidden", isSimple);
-      if (dom.correctionSettingsGroup) dom.correctionSettingsGroup.classList.toggle("hidden", isSimple);
-      if (dom.methodSettingsGroup) dom.methodSettingsGroup.classList.toggle("settings-group--muted", isSimple);
+      const isQc = getMode() === "qc";
+      if (dom.qcSettingsGroup) dom.qcSettingsGroup.classList.toggle("hidden", !isQc);
+      if (dom.correctionSettingsGroup) dom.correctionSettingsGroup.classList.toggle("hidden", !isQc);
+      if (dom.methodSettingsGroup) dom.methodSettingsGroup.classList.toggle("settings-group--muted", !isQc);
     });
   });
   dom.downloadSummary.addEventListener("click", () => downloadOutput("summary", "ysi_summary.csv"));
@@ -356,11 +356,16 @@ function showResults() {
 function showUpload() {
   dom.resultsSection.classList.add("hidden");
   dom.uploadSection.classList.remove("hidden");
-  // Reset panels that simple mode may have hidden
+  // Restore QC-only result panels
   [dom.chartPanel, dom.flagsPanel].forEach((p) => p.classList.remove("hidden"));
   dom.measurementsDetails.classList.add("hidden");
   if (dom.downloadOutliersBtn) dom.downloadOutliersBtn.classList.remove("hidden");
   dom.downloadCorrected.classList.add("hidden");
+  // Sync settings visibility to current mode
+  const isQc = getMode() === "qc";
+  if (dom.qcSettingsGroup) dom.qcSettingsGroup.classList.toggle("hidden", !isQc);
+  if (dom.correctionSettingsGroup) dom.correctionSettingsGroup.classList.toggle("hidden", !isQc);
+  if (dom.methodSettingsGroup) dom.methodSettingsGroup.classList.toggle("settings-group--muted", !isQc);
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
