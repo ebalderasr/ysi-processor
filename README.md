@@ -61,7 +61,7 @@ Four steps. No installation. No command line.
 
 Drag one or more `BioSample*.csv` files onto the drop zone or click to browse. Multiple files from the same batch are concatenated automatically. The app shows file names, row counts, and detects the column layout.
 
-<img src="Fig/1 - Fig_1.png" alt="Step 1 – Upload BioSample CSV files" width="700"/>
+<img src="Fig/Fig_1.png" alt="Step 1 – Upload BioSample CSV files" width="700"/>
 
 <br>
 
@@ -72,7 +72,7 @@ Two modes are available:
 - **Simple grouping** — groups replicates by batch, well, and analyte, and reports mean, SD, and CV for each group. No outlier detection. Use this for a quick overview or when your replicates are already clean.
 - **Quality control** — runs the full three-method outlier detection pipeline, assigns status badges (PASS · CLEANED · REVIEW · FAIL), generates the variability snapshot chart and the flagged replicates table, and unlocks the control correction feature.
 
-<img src="Fig/2 - Fig_2.png" alt="Step 2 – Choose analysis mode" width="700"/>
+<img src="Fig/Fig_2.png" alt="Step 2 – Choose analysis mode" width="700"/>
 
 <br>
 
@@ -80,7 +80,7 @@ Two modes are available:
 
 Four thresholds control how aggressively the outlier engine flags and discards replicates.
 
-<img src="Fig/3 - Fig_3.png" alt="Step 3 – Configure QC parameters" width="700"/>
+<img src="Fig/Fig_3.png" alt="Step 3 – Configure QC parameters" width="700"/>
 
 | Parameter | Default | What it does |
 |---|---|---|
@@ -97,7 +97,7 @@ A replicate is only ever recommended for discard if it is the single worst offen
 
 If you include a known-concentration control well in each run (e.g., a commercial standard or a house QC sample), YSI Processor can apply a post-hoc correction to every other well to compensate for instrument drift or baseline offset.
 
-<img src="Fig/4 - Fig_4.png" alt="Step 4 – Control correction options" width="700"/>
+<img src="Fig/Fig_4.png" alt="Step 4 – Control correction options" width="700"/>
 
 Enter the well ID of your control (default: `R24_A01`) and configure the correction type per analyte:
 
