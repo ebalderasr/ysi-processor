@@ -1,27 +1,45 @@
-# Environments
+# ── Python ────────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+
+# ── Virtual environments ───────────────────────────────────────────────────────
 venv/
 .venv/
 env/
 .env/
 
-# Python cache
-__pycache__/
-*.pyc
+# ── Test / coverage ────────────────────────────────────────────────────────────
+.pytest_cache/
+.coverage
+htmlcov/
 
-# YSI raw data (optional, but good practice so you don't commit big CSVs by accident)
+# ── Editor / IDE ───────────────────────────────────────────────────────────────
+.claude/
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# ── OS metadata ────────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+*:Zone.Identifier
+
+# ── YSI raw data (never commit instrument exports) ─────────────────────────────
 BioSample*.csv
 BioCalibration*.csv
 ISESample*.csv
 ISECalibration*.csv
+Demo_data/
 
-# Output files
-ysi_resultados_procesados.csv
-ysi_variacion_muestras.png
-ysi_measurements_annotated.csv
+# ── Generated outputs ─────────────────────────────────────────────────────────
 ysi_summary.csv
+ysi_measurements_annotated.csv
 ysi_outliers.csv
 ysi_file_manifest.csv
+ysi_corrected.csv
 ysi_cv_overview.png
 ysi_flagged_replicates.png
 ysi_quality_report.html
-demo_output/
