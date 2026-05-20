@@ -47,6 +47,7 @@ def build_file_manifest(data: pd.DataFrame) -> pd.DataFrame:
         "Lot",
         "SensorStatus",
         "CompletionState",
+        "Errors",
         "Error",
         "ErrorMessage",
     ]

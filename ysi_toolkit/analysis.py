@@ -22,9 +22,11 @@ OPTIONAL_COLUMN_ALIASES: dict[str, list[str]] = {
     "state": ["CompletionState", "Status", "ResultState"],
     "sample": ["SampleSequenceName", "SampleName", "SampleId", "SampleID"],
     "timestamp": ["LocalCompletionTime", "DateTime", "Timestamp", "Date"],
-    "error": ["Error", "ErrorMessage", "SensorStatus", "InstrumentStatus"],
+    "error": ["Errors", "Error", "ErrorMessage", "SensorStatus", "InstrumentStatus"],
     "units": ["Units", "Unit", "MeasurementUnits", "Measurement Units"],
 }
+
+REPLICATE_GROUP_COLUMNS = ["SourceFile", "PlateSequenceName", "BatchName", "WellId", "ChemistryId"]
 
 
 def resolve_columns(data: pd.DataFrame) -> dict[str, str]:
@@ -72,10 +74,15 @@ def prepare_measurements(data: pd.DataFrame, columns: dict[str, str]) -> pd.Data
         frame[column] = frame[column].astype(str).str.strip()
 
     if "timestamp" in columns:
-        frame[columns["timestamp"]] = pd.to_datetime(frame[columns["timestamp"]], dayfirst=True, errors="coerce")
+        frame[columns["timestamp"]] = pd.to_datetime(
+            frame[columns["timestamp"]],
+            format="mixed",
+            dayfirst=True,
+            errors="coerce",
+        )
         frame = frame.sort_values(columns["timestamp"]).reset_index(drop=True)
 
-    group_cols = [columns["plate"], columns["batch"], columns["well"], columns["chemistry"]]
+    group_cols = ["SourceFile", columns["plate"], columns["batch"], columns["well"], columns["chemistry"]]
     frame["ReplicateIndex"] = frame.groupby(group_cols).cumcount() + 1
     frame.rename(
         columns={
@@ -102,13 +109,13 @@ def prepare_measurements(data: pd.DataFrame, columns: dict[str, str]) -> pd.Data
 
 def annotate_replicates(data: pd.DataFrame, config: ProcessingConfig) -> pd.DataFrame:
     """Compute replicate-level QC metrics and outlier recommendations."""
-    group_cols = ["PlateSequenceName", "BatchName", "WellId", "ChemistryId"]
     annotated_groups = [
         _annotate_group(group.copy(), config)
-        for _, group in data.groupby(group_cols, sort=True, dropna=False)
+        for _, group in data.groupby(REPLICATE_GROUP_COLUMNS, sort=True, dropna=False)
     ]
     annotated = pd.concat(annotated_groups, ignore_index=True)
-    return annotated.sort_values(group_cols + ["ReplicateIndex"]).reset_index(drop=True)
+    sort_cols = ["SourceFile", "PlateSequenceName", "BatchName", "WellId", "ChemistryId", "ReplicateIndex"]
+    return annotated.sort_values(sort_cols).reset_index(drop=True)
 
 
 def _annotate_group(group: pd.DataFrame, config: ProcessingConfig) -> pd.DataFrame:
@@ -201,12 +208,11 @@ def _annotate_group(group: pd.DataFrame, config: ProcessingConfig) -> pd.DataFra
 
 def build_summary(annotated: pd.DataFrame, config: ProcessingConfig) -> pd.DataFrame:
     """Build group-level summary with raw and cleaned statistics."""
-    group_cols = ["PlateSequenceName", "BatchName", "WellId", "ChemistryId"]
     records: list[dict[str, Any]] = []
-    for keys, group in annotated.groupby(group_cols, sort=True, dropna=False):
+    for keys, group in annotated.groupby(REPLICATE_GROUP_COLUMNS, sort=True, dropna=False):
         kept = group.loc[~group["RecommendedDiscard"]]
         discarded = group.loc[group["RecommendedDiscard"]]
-        record: dict[str, Any] = dict(zip(group_cols, keys))
+        record: dict[str, Any] = dict(zip(REPLICATE_GROUP_COLUMNS, keys))
         record["ReplicateCount"] = int(len(group))
         record["DiscardedReplicateCount"] = int(discarded.shape[0])
         record["RecommendedDiscardReplicates"] = _join_replicates(discarded["ReplicateIndex"])
@@ -221,17 +227,17 @@ def build_summary(annotated: pd.DataFrame, config: ProcessingConfig) -> pd.DataF
         record["PassesCVThresholdAfterCleaning"] = bool(
             pd.notna(record["CleanCVPercent"]) and record["CleanCVPercent"] <= config.cv_threshold
         )
+        record["PlateSequenceNames"] = _join_unique(group["PlateSequenceName"])
+        record["SourceFiles"] = _join_unique(group["SourceFile"])
         if "Unit" in group.columns:
             record["Unit"] = _join_unique(group["Unit"])
         if "SampleSequenceName" in group.columns:
             record["SampleSequenceNames"] = _join_unique(group["SampleSequenceName"])
         if "Timestamp" in group.columns:
             record["Timestamps"] = _join_unique(group["Timestamp"])
-        if "SourceFile" in group.columns:
-            record["SourceFiles"] = _join_unique(group["SourceFile"])
         records.append(record)
 
-    return pd.DataFrame(records).sort_values(group_cols).reset_index(drop=True)
+    return pd.DataFrame(records).sort_values(REPLICATE_GROUP_COLUMNS).reset_index(drop=True)
 
 
 def build_outlier_table(annotated: pd.DataFrame) -> pd.DataFrame:
@@ -257,7 +263,7 @@ def build_outlier_table(annotated: pd.DataFrame) -> pd.DataFrame:
     present = [column for column in columns if column in annotated.columns]
     outliers = annotated[(annotated["RecommendedDiscard"]) | (annotated["ReviewRequired"])].copy()
     return outliers[present].sort_values(
-        ["PlateSequenceName", "BatchName", "WellId", "ChemistryId", "ReplicateIndex"]
+        ["SourceFile", "PlateSequenceName", "BatchName", "WellId", "ChemistryId", "ReplicateIndex"]
     ).reset_index(drop=True)
 
 
