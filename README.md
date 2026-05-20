@@ -59,7 +59,7 @@ Four steps. No installation. No command line.
 
 **Step 1 — Upload your data**
 
-Drag one or more `BioSample*.csv` files onto the drop zone or click to browse. Multiple files from the same batch are concatenated automatically. The app shows file names, row counts, and detects the column layout.
+Drag one or more `BioSample*.csv` files onto the drop zone or click to browse. The app shows file names, row counts, and detects the column layout. Replicates are grouped within each source file and plate sequence, so repeated well IDs from different `PlateSequenceName` values are not merged together.
 
 <img src="Fig/Fig_1.png" alt="Step 1 – Upload BioSample CSV files" width="700"/>
 
@@ -69,8 +69,8 @@ Drag one or more `BioSample*.csv` files onto the drop zone or click to browse. M
 
 Two modes are available:
 
-- **Simple grouping** — groups replicates by batch, well, and analyte, and reports mean, SD, and CV for each group. No outlier detection. Use this for a quick overview or when your replicates are already clean.
-- **Quality control** — runs the full three-method outlier detection pipeline, assigns status badges (PASS · CLEANED · REVIEW · FAIL), generates the variability snapshot chart and the flagged replicates table, and unlocks the control correction feature.
+- **Simple grouping** — groups replicates by source file, plate sequence, batch, well, and analyte, and reports mean, SD, and CV for each group. No outlier detection. Use this for a quick overview or when your replicates are already clean. Optional control correction is also available in this mode.
+- **Quality control** — runs the full three-method outlier detection pipeline, assigns status badges (PASS · CLEANED · REVIEW · FAIL), generates the variability snapshot chart and the flagged replicates table, and also supports the control correction feature.
 
 <img src="Fig/Fig_2.png" alt="Step 2 – Choose analysis mode" width="700"/>
 
@@ -93,7 +93,7 @@ A replicate is only ever recommended for discard if it is the single worst offen
 
 <br>
 
-**Step 4 — Apply control correction** *(optional, only in Quality control mode)*
+**Step 4 — Apply control correction** *(optional, available in both modes)*
 
 If you include a known-concentration control well in each run (e.g., a commercial standard or a house QC sample), YSI Processor can apply a post-hoc correction to every other well to compensate for instrument drift or baseline offset.
 
@@ -107,7 +107,7 @@ Enter the well ID of your control (default: `R24_A01`) and configure the correct
 | **Additive** | corrected = value − control | Use when the instrument has a constant baseline offset — it reads a fixed amount above or below zero regardless of the actual concentration. For example, if the lactate control (true value: 0 g/L) reads 0.15 g/L, all lactate values are shifted down by 0.15. SD is unchanged. Default for **Lactate**. |
 | **None** | — | No correction applied. Default for **Glutamate**. |
 
-When correction is enabled, a **Corrected CSV** download becomes available. It contains the same pivot table as the main summary but with corrected mean and SD columns for each analyte.
+When correction is enabled, a **Corrected CSV** download becomes available. It contains the same pivot table as the main summary but with corrected mean and SD columns for each analyte. In **Simple grouping**, the correction is applied to the raw grouped mean and SD. In **Quality control**, it is applied to the cleaned mean and SD after any recommended discard.
 
 ---
 
@@ -141,16 +141,16 @@ A replicate accumulates one flag per test it triggers. It is **recommended for d
 | **No installation** | Runs fully client-side — no Python, no pip, no server |
 | **Two analysis modes** | Simple grouping or full Quality control with outlier detection |
 | **Multi-file support** | Load several plate sequences in one session |
-| **Cross-plate replicate grouping** | Groups by Batch + Well + Analyte; plate sequences merged correctly |
+| **Plate-aware replicate grouping** | Groups by Source file + PlateSequenceName + Batch + Well + Analyte |
 | **Three-method outlier detection** | Modified Z-Score · IQR Fence · Leave-One-Out CV |
 | **Consensus threshold** | Configurable minimum flags before a discard is recommended |
 | **Pivot results table** | One row per well, column groups per analyte with units |
 | **Status badges** | PASS · CLEANED · REVIEW · FAIL with color-coded rows |
 | **CV chart** | Variability snapshot for the top 20 wells |
 | **Copy for Excel** | Pivot table copied as tab-separated text |
-| **Control correction** | Multiplicative or additive correction per analyte from an internal control well |
+| **Control correction** | Optional multiplicative or additive correction per analyte from an internal control well in both modes |
 | **Five CSV exports** | Summary · Measurements · Outliers · Manifest · Corrected |
-| **Python CLI** | Same analysis engine available as a local command-line tool |
+| **Python CLI** | Local QC pipeline for the same replicate-grouping and outlier logic |
 
 ---
 
@@ -162,7 +162,7 @@ A replicate accumulates one flag per test it triggers. It is **recommended for d
 | `ysi_measurements_annotated.csv` | Replicate-level QC detail with all flag scores |
 | `ysi_outliers.csv` | Only the rows that triggered review or discard |
 | `ysi_file_manifest.csv` | Metadata summary of the uploaded files |
-| `ysi_corrected.csv` | Pivot table with control-corrected mean and SD per analyte *(only when correction is enabled)* |
+| `ysi_corrected.csv` | Pivot table with control-corrected mean and SD per analyte *(browser app only, when correction is enabled)* |
 
 ---
 

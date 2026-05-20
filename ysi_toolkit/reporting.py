@@ -50,9 +50,9 @@ def _plot_cv_overview(summary: pd.DataFrame, output_path: Path, config: Processi
     else:
         plot_df = summary.copy()
         plot_df["GroupLabel"] = (
-            plot_df["PlateSequenceName"] + " | " + plot_df["BatchName"] + " | " + plot_df["WellId"] + " | " + plot_df["ChemistryId"]
+            plot_df["PlateSequenceNames"] + " | " + plot_df["BatchName"] + " | " + plot_df["WellId"] + " | " + plot_df["ChemistryId"]
         )
-        plot_df = plot_df.sort_values("RawCVPercent", ascending=False).head(25)
+        plot_df = plot_df.sort_values("RawCVPercent", ascending=False).head(20)
         positions = range(len(plot_df))
         ax.bar(positions, plot_df["RawCVPercent"], label="Raw CV%", alpha=0.8, color="#c2410c")
         ax.bar(positions, plot_df["CleanCVPercent"], label="Clean CV%", alpha=0.8, color="#15803d")

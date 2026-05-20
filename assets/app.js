@@ -95,10 +95,7 @@ function initializeApp() {
       document.querySelectorAll(".mode-card").forEach((card) => {
         card.classList.toggle("selected", card.querySelector("input").checked);
       });
-      const isQc = getMode() === "qc";
-      if (dom.qcSettingsGroup) dom.qcSettingsGroup.classList.toggle("hidden", !isQc);
-      if (dom.correctionSettingsGroup) dom.correctionSettingsGroup.classList.toggle("hidden", !isQc);
-      if (dom.methodSettingsGroup) dom.methodSettingsGroup.classList.toggle("settings-group--muted", !isQc);
+      syncModeVisibility();
     });
   });
   dom.downloadSummary.addEventListener("click", () => downloadOutput("summary", "ysi_summary.csv"));
@@ -139,11 +136,20 @@ function initializeApp() {
     const files = Array.from(event.dataTransfer?.files || []).filter((file) => file.name.toLowerCase().endsWith(".csv"));
     setFiles(files);
   });
+
+  syncModeVisibility();
 }
 
 function getMode() {
   const checked = document.querySelector('input[name="analysis-mode"]:checked');
   return checked ? checked.value : "qc";
+}
+
+function syncModeVisibility() {
+  const isQc = getMode() === "qc";
+  if (dom.qcSettingsGroup) dom.qcSettingsGroup.classList.toggle("hidden", !isQc);
+  if (dom.correctionSettingsGroup) dom.correctionSettingsGroup.classList.remove("hidden");
+  if (dom.methodSettingsGroup) dom.methodSettingsGroup.classList.toggle("settings-group--muted", !isQc);
 }
 
 function setFiles(files) {
@@ -228,11 +234,24 @@ async function processFiles() {
     const measurements = prepareMeasurements(rawRows, columns);
     const manifest = buildManifest(rawRows);
 
+    const corrConfig = getCorrectionConfig();
+    let corrStatusMsg = "";
+
     if (getMode() === "simple") {
       const summary = buildSimpleSummary(measurements);
       state.outputs = { measurements, summary, outliers: [], manifest, config: null, mode: "simple" };
+      if (corrConfig.enabled) {
+        const controlFound = summary.some((r) => r.WellId === corrConfig.controlWell);
+        if (controlFound) {
+          state.outputs.corrected = buildCorrectedRows(summary, corrConfig, "simple");
+          dom.downloadCorrected.classList.remove("hidden");
+          corrStatusMsg = ` · Corrección aplicada (control: ${corrConfig.controlWell}).`;
+        } else {
+          corrStatusMsg = ` · ⚠ Pozo "${corrConfig.controlWell}" no encontrado — verifica el ID.`;
+        }
+      }
       renderSimpleOutputs(summary, measurements);
-      updateStatus(`${measurements.length} mediciones agrupadas en ${summary.length} grupos.`);
+      updateStatus(`${measurements.length} mediciones agrupadas en ${summary.length} grupos.${corrStatusMsg}`);
     } else {
       const config = getConfig();
       const annotated = annotateReplicates(measurements, config);
@@ -240,12 +259,10 @@ async function processFiles() {
       const outliers = buildOutlierTable(annotated);
       state.outputs = { measurements: annotated, summary, outliers, manifest, config, mode: "qc" };
 
-      const corrConfig = getCorrectionConfig();
-      let corrStatusMsg = "";
       if (corrConfig.enabled) {
         const controlFound = summary.some((r) => r.WellId === corrConfig.controlWell);
         if (controlFound) {
-          state.outputs.corrected = buildCorrectedRows(summary, corrConfig);
+          state.outputs.corrected = buildCorrectedRows(summary, corrConfig, "qc");
           dom.downloadCorrected.classList.remove("hidden");
           corrStatusMsg = ` · Corrección aplicada (control: ${corrConfig.controlWell}).`;
         } else {
@@ -288,12 +305,15 @@ function getCorrectionConfig() {
   return { enabled: true, controlWell, analytes };
 }
 
-function buildCorrectedRows(summary, corrConfig) {
+function buildCorrectedRows(summary, corrConfig, mode = "qc") {
   const { controlWell, analytes } = corrConfig;
+  const valueKey = mode === "simple" ? "Mean" : "CleanMean";
+  const sdKey = mode === "simple" ? "SD" : "CleanStd";
+  const cvKey = mode === "simple" ? "CVPercent" : "CleanCVPercent";
 
   const controlValues = {};
   summary.filter((r) => r.WellId === controlWell).forEach((r) => {
-    const v = Number(r.CleanMean);
+    const v = Number(r[valueKey]);
     if (Number.isFinite(v)) controlValues[r.ChemistryId] = v;
   });
 
@@ -311,10 +331,12 @@ function buildCorrectedRows(summary, corrConfig) {
     sortedChemistries.forEach((chem) => {
       const r = data[chem];
       const u = chemUnit[chem] ? ` (${chemUnit[chem]})` : "";
-      row[`${chem}${u} Mean`] = r && Number.isFinite(Number(r.CleanMean)) ? Number(r.CleanMean).toFixed(4) : "";
-      row[`${chem}${u} SD`] = r && Number.isFinite(Number(r.CleanStd)) ? Number(r.CleanStd).toFixed(4) : "";
-      row[`${chem} CV%`] = r && Number.isFinite(Number(r.CleanCVPercent)) ? Number(r.CleanCVPercent).toFixed(2) : "";
-      row[`${chem} Status`] = r ? statusLabel(r) : "";
+      row[`${chem}${u} Mean`] = r && Number.isFinite(Number(r[valueKey])) ? Number(r[valueKey]).toFixed(4) : "";
+      row[`${chem}${u} SD`] = r && Number.isFinite(Number(r[sdKey])) ? Number(r[sdKey]).toFixed(4) : "";
+      row[`${chem} CV%`] = r && Number.isFinite(Number(r[cvKey])) ? Number(r[cvKey]).toFixed(2) : "";
+      if (mode === "qc") {
+        row[`${chem} Status`] = r ? statusLabel(r) : "";
+      }
     });
 
     correctedChems.forEach((chem) => {
@@ -322,13 +344,13 @@ function buildCorrectedRows(summary, corrConfig) {
       const cfg = analytes[chem] || { type: "none" };
       const cv = controlValues[chem];
       const u = chemUnit[chem] ? ` (${chemUnit[chem]})` : "";
-      if (!r || !Number.isFinite(Number(r.CleanMean))) {
+      if (!r || !Number.isFinite(Number(r[valueKey]))) {
         row[`${chem}${u} Corr. Mean`] = "";
         row[`${chem}${u} Corr. SD`] = "";
         return;
       }
-      const m = Number(r.CleanMean);
-      const s = Number(r.CleanStd);
+      const m = Number(r[valueKey]);
+      const s = Number(r[sdKey]);
       if (cfg.type === "multiplicative" && cv > 0) {
         const f = cfg.expected / cv;
         row[`${chem}${u} Corr. Mean`] = (m * f).toFixed(4);
@@ -362,10 +384,7 @@ function showUpload() {
   if (dom.downloadOutliersBtn) dom.downloadOutliersBtn.classList.remove("hidden");
   dom.downloadCorrected.classList.add("hidden");
   // Sync settings visibility to current mode
-  const isQc = getMode() === "qc";
-  if (dom.qcSettingsGroup) dom.qcSettingsGroup.classList.toggle("hidden", !isQc);
-  if (dom.correctionSettingsGroup) dom.correctionSettingsGroup.classList.toggle("hidden", !isQc);
-  if (dom.methodSettingsGroup) dom.methodSettingsGroup.classList.toggle("settings-group--muted", !isQc);
+  syncModeVisibility();
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
@@ -687,21 +706,24 @@ function buildSimpleSummary(measurements) {
       const values = group.map((r) => r.Concentration);
       const m = mean(values);
       const s = values.length > 1 ? sampleStd(values) : Number.NaN;
+      const cv = safeCv(m, s);
       return {
         BatchName: first.BatchName,
         WellId: first.WellId,
         ChemistryId: first.ChemistryId,
         PlateSequenceNames: joinUnique(group.map((r) => r.PlateSequenceName).filter(Boolean)),
+        SourceFiles: joinUnique(group.map((r) => r.SourceFile).filter(Boolean)),
         N: group.length,
         Mean: roundOrBlank(m, 4),
         SD: roundOrBlank(s, 4),
+        CVPercent: roundOrBlank(cv, 2),
         Unit: first.Unit || "",
       };
     });
 }
 
 function renderSimpleOutputs(summary, measurements) {
-  const uniqueWells = new Set(summary.map((r) => `${r.BatchName}|${r.WellId}`)).size;
+  const uniqueWells = new Set(summary.map((r) => `${r.SourceFiles || ""}|${r.PlateSequenceNames || ""}|${r.BatchName}|${r.WellId}`)).size;
   const uniqueChems = new Set(summary.map((r) => r.ChemistryId)).size;
 
   const kpis = [
@@ -739,7 +761,7 @@ function renderSimplePivot(summary) {
 
   const wellMap = new Map();
   summary.forEach((row) => {
-    const key = `${row.BatchName}|${row.WellId}`;
+    const key = `${row.SourceFiles || ""}|${row.PlateSequenceNames || ""}|${row.BatchName}|${row.WellId}`;
     if (!wellMap.has(key)) wellMap.set(key, { meta: row, data: {} });
     wellMap.get(key).data[row.ChemistryId] = row;
   });
@@ -749,13 +771,14 @@ function renderSimplePivot(summary) {
       <th rowspan="2">Well</th>
       <th rowspan="2">Batch</th>
       <th rowspan="2">Placas</th>
-      ${sortedChems.map((c) => `<th colspan="3" class="chem-group-header">${escapeHtml(c)}</th>`).join("")}
+      ${sortedChems.map((c) => `<th colspan="4" class="chem-group-header">${escapeHtml(c)}</th>`).join("")}
     </tr>
     <tr>
       ${sortedChems.map(() => `
         <th class="chem-sub-header">N</th>
         <th class="chem-sub-header">Media</th>
         <th class="chem-sub-header">SD</th>
+        <th class="chem-sub-header">CV%</th>
       `).join("")}
     </tr>
   </thead>`;
@@ -763,11 +786,12 @@ function renderSimplePivot(summary) {
   const tbodyRows = [...wellMap.entries()].map(([, { meta, data }]) => {
     const chemCells = sortedChems.map((chem) => {
       const row = data[chem];
-      if (!row) return `<td class="no-data chem-col-first">—</td><td class="no-data">—</td><td class="no-data">—</td>`;
+      if (!row) return `<td class="no-data chem-col-first">—</td><td class="no-data">—</td><td class="no-data">—</td><td class="no-data">—</td>`;
       const unit = row.Unit ? ` ${row.Unit}` : "";
       return `<td class="chem-col-first" style="text-align:center">${row.N}</td>
               <td style="text-align:center">${row.Mean}${escapeHtml(unit)}</td>
-              <td style="text-align:center">${row.SD !== "" ? row.SD : "—"}</td>`;
+              <td style="text-align:center">${row.SD !== "" ? row.SD : "—"}</td>
+              <td style="text-align:center">${row.CVPercent !== "" ? row.CVPercent : "—"}</td>`;
     }).join("");
     return `<tr>
       <td class="well-id-cell">${escapeHtml(meta.WellId)}</td>
@@ -792,7 +816,7 @@ function renderCvChart(summary, config) {
   topRows.forEach((row) => {
     const chartRow = document.createElement("div");
     chartRow.className = "chart-bar-row";
-    const label = `${row.WellId} · ${row.ChemistryId} · ${row.PlateSequenceName} · ${row.BatchName}`;
+    const label = `${row.WellId} · ${row.ChemistryId} · ${row.PlateSequenceNames || ""} · ${row.BatchName}`;
     const rawPct = Math.max(0, Number(row.RawCVPercent) || 0) / maxValue * 100;
     const cleanPct = Math.max(0, Number(row.CleanCVPercent) || 0) / maxValue * 100;
     chartRow.innerHTML = `
@@ -949,14 +973,16 @@ function groupBy(items, keyFn) {
 }
 
 function groupKey(row) {
-  return [row.BatchName, row.WellId, row.ChemistryId].join("||");
+  return [row.SourceFile || "", row.PlateSequenceName, row.BatchName, row.WellId, row.ChemistryId].join("||");
 }
 
 function sortGroups(left, right) {
   const a = left[0];
   const b = right[0];
   return (
-    a.BatchName.localeCompare(b.BatchName)
+    (a.SourceFile || "").localeCompare(b.SourceFile || "")
+    || a.PlateSequenceName.localeCompare(b.PlateSequenceName)
+    || a.BatchName.localeCompare(b.BatchName)
     || a.WellId.localeCompare(b.WellId)
     || a.ChemistryId.localeCompare(b.ChemistryId)
   );
@@ -1094,19 +1120,19 @@ function buildWellPivot(summary) {
     chemUnit[chem] = match ? match.Unit : "";
   });
 
-  // Pivot: (Batch||Well) → { meta, data: {ChemistryId → summaryRow} }
+  // Pivot: (SourceFile||PlateSequence||Batch||Well) → { meta, data: {ChemistryId → summaryRow} }
   const wellMap = new Map();
   summary.forEach((row) => {
-    const key = [row.BatchName, row.WellId].join("||");
+    const key = [row.SourceFiles || "", row.PlateSequenceNames || "", row.BatchName, row.WellId].join("||");
     if (!wellMap.has(key)) wellMap.set(key, { meta: row, data: {} });
     wellMap.get(key).data[row.ChemistryId] = row;
   });
 
-  // Sort wells by Batch → Well (natural sort)
+  // Sort wells by file → plate → batch → well
   const sortedKeys = [...wellMap.keys()].sort((a, b) => {
-    const [ba, wa] = a.split("||");
-    const [bb, wb] = b.split("||");
-    return ba.localeCompare(bb) || wa.localeCompare(wb);
+    const [fa, pa, ba, wa] = a.split("||");
+    const [fb, pb, bb, wb] = b.split("||");
+    return fa.localeCompare(fb) || pa.localeCompare(pb) || ba.localeCompare(bb) || wa.localeCompare(wb);
   });
 
   return { sortedChemistries, chemUnit, wellMap, sortedKeys };
@@ -1159,9 +1185,10 @@ function renderQuickResults(summary, config) {
 
     const chemCells = sortedChemistries.map((chem, ci) => {
       const row = data[chem];
-      const borderAttr = ci > 0 ? ` class="chem-col-first"` : "";
+      const cellClass = ci > 0 ? "chem-col-first" : "";
       if (!row) {
-        return `<td${borderAttr} class="no-data" colspan="4">—</td>`;
+        const noDataClass = cellClass ? `${cellClass} no-data` : "no-data";
+        return `<td class="${noDataClass}" colspan="4">—</td>`;
       }
       const cleanMean = Number(row.CleanMean);
       const cleanStd = Number(row.CleanStd);
@@ -1171,7 +1198,8 @@ function renderQuickResults(summary, config) {
       const cvCell = Number.isFinite(cleanCV)
         ? `<span class="${cleanCV > threshold ? "cv-high" : "cv-ok"}">${cleanCV.toFixed(2)}</span>`
         : "—";
-      return `<td${borderAttr}>${meanCell}</td><td>${sdCell}</td><td>${cvCell}</td><td>${statusBadgeHtml(row)}</td>`;
+      const firstCellClass = cellClass ? ` class="${cellClass}"` : "";
+      return `<td${firstCellClass}>${meanCell}</td><td>${sdCell}</td><td>${cvCell}</td><td>${statusBadgeHtml(row)}</td>`;
     }).join("");
 
     return `<tr class="${rowCls}">${metaCells}${chemCells}</tr>`;
@@ -1193,19 +1221,19 @@ function copySimpleTable() {
 
   const wellMap = new Map();
   summary.forEach((row) => {
-    const key = `${row.BatchName}|${row.WellId}`;
+    const key = `${row.SourceFiles || ""}|${row.PlateSequenceNames || ""}|${row.BatchName}|${row.WellId}`;
     if (!wellMap.has(key)) wellMap.set(key, { meta: row, data: {} });
     wellMap.get(key).data[row.ChemistryId] = row;
   });
 
   const headerCols = ["Well", "Batch", "Plates"];
-  sortedChems.forEach((c) => { headerCols.push(`${c} N`, `${c} Media`, `${c} SD`); });
+  sortedChems.forEach((c) => { headerCols.push(`${c} N`, `${c} Media`, `${c} SD`, `${c} CV%`); });
 
   const rows = [...wellMap.entries()].map(([, { meta, data }]) => {
     const cols = [meta.WellId, meta.BatchName, meta.PlateSequenceNames || ""];
     sortedChems.forEach((chem) => {
       const row = data[chem];
-      cols.push(row ? row.N : "", row ? row.Mean : "", row ? row.SD : "");
+      cols.push(row ? row.N : "", row ? row.Mean : "", row ? row.SD : "", row ? row.CVPercent : "");
     });
     return cols.join("\t");
   });

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pandas as pd
 
-from ysi_toolkit.analysis import annotate_replicates, build_summary
+from ysi_toolkit.analysis import annotate_replicates, build_summary, prepare_measurements, resolve_columns
 from ysi_toolkit.config import ProcessingConfig
 
 
@@ -43,3 +43,27 @@ def test_summary_uses_cleaned_statistics_after_discard() -> None:
     assert row["RecommendedDiscardReplicates"] == "4"
     assert row["CleanMean"] == 2.0
     assert bool(row["PassesCVThresholdAfterCleaning"]) is True
+
+
+def test_replicates_are_not_merged_across_plate_sequences_in_same_file() -> None:
+    raw = pd.DataFrame(
+        {
+            "PlateSequenceName": ["PlateA", "PlateA", "PlateB", "PlateB"],
+            "BatchName": ["Batch-01"] * 4,
+            "WellId": ["A01"] * 4,
+            "ChemistryId": ["Glucose"] * 4,
+            "Concentration": [1.0, 1.1, 2.0, 2.1],
+            "CompletionState": ["Complete"] * 4,
+            "SourceFile": ["BioSample001.csv"] * 4,
+        }
+    )
+    columns = resolve_columns(raw)
+    measurements = prepare_measurements(raw, columns)
+
+    assert measurements["ReplicateIndex"].tolist() == [1, 2, 1, 2]
+
+    annotated = annotate_replicates(measurements, ProcessingConfig(input_dir=".", output_dir="."))
+    summary = build_summary(annotated, ProcessingConfig(input_dir=".", output_dir="."))
+
+    assert summary.shape[0] == 2
+    assert summary["PlateSequenceName"].tolist() == ["PlateA", "PlateB"]
